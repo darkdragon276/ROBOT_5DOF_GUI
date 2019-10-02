@@ -4,7 +4,8 @@
 #
 #------------------------------------------------
 QT       += core gui
-
+QT       += serialport
+QT       += multimedia multimediawidgets
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = robot_5DOF_GUI
