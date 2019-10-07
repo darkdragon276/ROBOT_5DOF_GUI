@@ -22,15 +22,148 @@ MainWindow::~MainWindow()
     delete m_ui;
     delete m_serial;
     delete m_status;
-    m_camera.reset();
     delete timer_camera;
     delete timer_serial;
 }
 
+void MainWindow::send_request(int &idcommand, const QString command, const QString para) {
+    idcommand++;
+    QByteArray request;
+    request.clear();
+    if(command.isEmpty()) {
+        QMessageBox::critical(this, tr("Critical Error"), tr("command is null/empty"));
+        return;
+    }
+    if(para.isEmpty()) {
+        request.append(tr("%1 %2").arg(QString::number(idcommand))
+                       .arg(command));
+    } else {
+        request.append(tr("%1 %2 %3").arg(QString::number(idcommand))
+                       .arg(command).arg(para));
+    }
+    serial_write(request);
+}
+
+void MainWindow::serial_pack(const QByteArray &data)
+{
+    if(data.isNull() || data.isEmpty()) {
+        logs_write(tr("data input of pack function is null/empty"), Qt::red);
+        return;
+    }
+    // packing
+    m_mutex.lock();
+    m_dataserial.clear();
+    m_dataserial.append(data);
+    int len = m_dataserial.length();
+    m_dataserial.push_front((char)0x7E);
+    while(len) {
+        int i = m_dataserial.length()-len;
+        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
+                m_dataserial.at(i) == (char)0x7F) {
+            char temp = m_dataserial.at(i);
+            temp ^= (char)0x02;
+            m_dataserial.remove(i, 1);
+            m_dataserial.insert(i, temp);
+            m_dataserial.insert(i, 0x7D);
+        }
+        len--;
+    }
+    m_dataserial.push_back((char)0x7F);
+    m_mutex.unlock();
+}
+
+void MainWindow::serial_unpack(const QByteArray &data)
+{
+    if(data.isNull() || data.isEmpty()) {
+        logs_write(tr("data input of pack function is null/empty"), Qt::red);
+        return;
+    }
+    if(data.at(0) != 0x7E || data.at(data.length()-1) != 0x7F) {
+        logs_write(tr("frame error. not have begin/end character"), Qt::red);
+        return;
+    }
+
+    m_mutex.lock();
+    m_dataserial.clear();
+    m_dataserial.append(data);
+    m_dataserial.remove(0, 1);
+    m_dataserial.remove(m_dataserial.length()-1, 1);
+    int len = m_dataserial.length();
+    while(len) {
+        int i = m_dataserial.length()-len;
+        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
+                m_dataserial.at(i) == (char)0x7F) {
+            char temp = m_dataserial.at(i+1);
+            temp ^= (char)0x02;
+            m_dataserial.remove(i, 2);
+            m_dataserial.insert(i, temp);
+            len--;
+        }
+        len--;
+    }
+    m_mutex.unlock();
+}
+
 void MainWindow::camera_init() {
     camera_updateDevice();
-    connect(m_ui->comboBox_CameraDevice, &QComboBox::currentTextChanged, this, &MainWindow::camera_setDevice);
+    timer_frame = new QTimer(this);
+    connect(timer_frame, &QTimer::timeout, this, &MainWindow::cv_process_image);
+}
 
+void MainWindow::cv_process_image() {
+    Mat frame;
+    m_camera >> frame;
+    if(frame.empty()) {
+        qDebug() << "frame empty";
+        camera_closeCamera();
+        return;
+    }
+    // process
+    cv_qtshow(frame, QImage::Format_RGB888);
+}
+
+void MainWindow::cv_qtshow(Mat img, QImage::Format format) {
+    Mat temp;
+    cvtColor(img, temp, COLOR_BGR2RGB);
+    QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
+    m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
+    temp.release();
+    img.release();
+    delete qimage;
+}
+
+void MainWindow::camera_openCamera() {
+    m_camera.open(m_ui->comboBox_CameraDevice->currentIndex());
+    if(m_camera.isOpened()) {
+        m_ui->comboBox_CameraDevice->setEnabled(false);
+        m_ui->pushButton_Camera_Connect->setText(tr("Disconnect"));
+        timer_camera->stop();
+        timer_frame->start(20);
+    } else {
+        QMessageBox::critical(this, tr("Critical Error"), tr("error open camera"));
+    }
+}
+
+void MainWindow::camera_closeCamera() {
+    m_camera.release();
+    if(m_camera.isOpened()) {
+        QMessageBox::critical(this, tr("Critical Error"), tr("error close camera"));
+    } else {
+        timer_frame->stop();
+        timer_camera->start(1000);
+        m_ui->comboBox_CameraDevice->setEnabled(true);
+        m_ui->pushButton_Camera_Connect->setText(tr("Connect"));
+    }
+}
+
+void MainWindow::timer_init() {
+    timer_serial = new QTimer(this);
+    connect(timer_serial, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
+    timer_serial->start(1000);
+
+    timer_camera = new QTimer(this);
+    connect(timer_camera, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
+    timer_camera->start(1000);
 }
 
 void MainWindow::camera_updateDevice() {
@@ -54,60 +187,6 @@ void MainWindow::camera_updateDevice() {
             m_ui->comboBox_CameraDevice->addItem(availableCameras.at(i).description());
         }
     }
-}
-
-void MainWindow::camera_setDevice() {
-    const QList<QCameraInfo> availableCameras = QCameraInfo::availableCameras();
-    for (const QCameraInfo &cameraInfo : availableCameras) {
-        if(cameraInfo.description() == m_ui->comboBox_CameraDevice->currentText()) {
-            m_camera.reset(new QCamera(cameraInfo));
-            m_img.reset(new QAbstractVideoSurface(this));
-            m_camera->setViewfinder(m_img);
-            timer_frame(20);
-        }
-    }
-    connect(m_camera.data(), QOverload<QCamera::Error>::of(&QCamera::error), this, &MainWindow::camera_handleError );
-    connect(m_camera.data(), &QCamera::stateChanged, this, &MainWindow::camera_stateControll );
-    connect(timer_frame, &QTimer::timeout, this, &MainWindow::image_processing);
-}
-
-void MainWindow::camera_stateControll(QCamera::State state)
-{
-    switch (state) {
-    case QCamera::ActiveState:
-        m_ui->pushButton_Camera_Connect->setText(tr("Disconnect"));
-        m_ui->comboBox_CameraDevice->setEnabled(false);
-        timer_camera->stop();
-        break;
-    case QCamera::UnloadedState:
-    case QCamera::LoadedState:
-        m_ui->pushButton_Camera_Connect->setText(tr("Connect"));
-        m_ui->comboBox_CameraDevice->setEnabled(true);
-        timer_camera->start(1000);
-    }
-}
-
-void MainWindow::camera_openCamera() {
-        m_camera->start();
-}
-
-void MainWindow::camera_closeCamera() {
-        m_camera->stop();
-}
-
-void MainWindow::camera_handleError() {
-    QMessageBox::critical(this, tr("Critical Error"), m_camera->errorString());
-//    camera_closeCamera();
-}
-
-void MainWindow::timer_init() {
-    timer_serial = new QTimer(this);
-    connect(timer_serial, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
-    timer_serial->start(1000);
-
-    timer_camera = new QTimer(this);
-    connect(timer_camera, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
-    timer_camera->start(1000);
 }
 
 void MainWindow::serial_init() {
@@ -153,6 +232,141 @@ void MainWindow::serial_init() {
     connect(m_serial, &QSerialPort::readyRead, this, &MainWindow::serial_read);
     connect(m_ui->pushButton_LogsClear, &QPushButton::clicked, this, &MainWindow::logs_clear);
 
+    connect(m_ui->checkBox_SetPos, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_SetWidth, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_SetHome, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_SetDuty, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_Save, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+
+    m_ui->label_Para1->hide();
+    m_ui->textEdit_Para1->hide();
+    m_ui->label_Para2->hide();
+    m_ui->textEdit_Para2->hide();
+    m_ui->label_Para3->hide();
+    m_ui->textEdit_Para3->hide();
+    m_ui->label_ManualExamplePara->setText("");
+}
+
+void MainWindow::manual_checkBox_event(bool checked) {
+    QCheckBox *checkbox = (QCheckBox*)sender();
+    if(checked) {
+        m_ui->checkBox_SetPos->setEnabled(false);
+        m_ui->checkBox_SetWidth->setEnabled(false);
+        m_ui->checkBox_SetHome->setEnabled(false);
+        m_ui->checkBox_SetDuty->setEnabled(false);
+        m_ui->checkBox_Save->setEnabled(false);
+
+        m_ui->pushButton_Request->setEnabled(true);
+        if(checkbox == m_ui->checkBox_SetPos) {
+
+            m_ui->checkBox_SetPos->setEnabled(true);
+            m_ui->label_Para1->setText("X    ");
+            m_ui->label_Para2->setText("Y    ");
+            m_ui->label_Para3->setText("Z    ");
+
+            m_ui->label_Para1->show();
+            m_ui->textEdit_Para1->show();
+            m_ui->label_Para2->show();
+            m_ui->textEdit_Para2->show();
+            m_ui->label_Para3->show();
+            m_ui->textEdit_Para3->show();
+
+            m_ui->label_ManualExamplePara->setText("X, Y, Z: \"10.2\" ");
+        } else if(checkbox == m_ui->checkBox_SetWidth) {
+
+            m_ui->checkBox_SetWidth->setEnabled(true);
+            m_ui->label_Para1->setText("Width");
+
+            m_ui->label_Para1->show();
+            m_ui->textEdit_Para1->show();
+
+            m_ui->label_ManualExamplePara->setText("Width: 3.0 -> 6.0");
+        } else if(checkbox == m_ui->checkBox_SetDuty) {
+
+            m_ui->checkBox_SetDuty->setEnabled(true);
+            m_ui->label_Para1->setText("Duty");
+            m_ui->label_Para2->setText("Channel");
+
+            m_ui->label_Para1->show();
+            m_ui->textEdit_Para1->show();
+            m_ui->label_Para2->show();
+            m_ui->textEdit_Para2->show();
+
+            m_ui->label_ManualExamplePara->setText("Duty: 1000 -> 2000, Channel: 1 -> 6");
+        } else if(checkbox == m_ui->checkBox_SetHome) {
+
+            m_ui->checkBox_SetHome->setEnabled(true);
+
+        } else if(checkbox == m_ui->checkBox_Save) {
+
+            m_ui->checkBox_Save->setEnabled(true);
+
+        }
+    } else {
+        m_ui->checkBox_SetPos->setEnabled(true);
+        m_ui->checkBox_SetWidth->setEnabled(true);
+        m_ui->checkBox_SetHome->setEnabled(true);
+        m_ui->checkBox_SetDuty->setEnabled(true);
+        m_ui->checkBox_Save->setEnabled(true);
+
+        m_ui->pushButton_Request->setEnabled(false);
+        m_ui->label_Para1->hide();
+        m_ui->textEdit_Para1->hide();
+        m_ui->label_Para2->hide();
+        m_ui->textEdit_Para2->hide();
+        m_ui->label_Para3->hide();
+        m_ui->textEdit_Para3->hide();
+        m_ui->label_ManualExamplePara->setText("");
+    }
+
+}
+
+void MainWindow::manual_checkPara_sendRequest() {
+    if(m_ui->checkBox_SetPos->isChecked()) {
+        bool isDouble_1, isDouble_2, isDouble_3;
+        m_ui->textEdit_Para1->toPlainText().toDouble(&isDouble_1);
+        m_ui->textEdit_Para2->toPlainText().toDouble(&isDouble_2);
+        m_ui->textEdit_Para3->toPlainText().toDouble(&isDouble_3);
+        if(isDouble_1 & isDouble_2 & isDouble_3) {
+            send_request(id_command, tr("SETPOS"), tr("%1 %2 %3").arg(m_ui->textEdit_Para1->toPlainText())
+                         .arg(m_ui->textEdit_Para2->toPlainText())
+                         .arg(m_ui->textEdit_Para3->toPlainText()));
+        } else {
+            QMessageBox::critical(this, tr("Error"), tr("All parameter must is double"));
+            return;
+        }
+    } else if(m_ui->checkBox_SetWidth->isChecked()) {
+        bool isDouble;
+        m_ui->textEdit_Para1->toPlainText().toDouble(&isDouble);
+        if(isDouble) {
+            send_request(id_command, tr("SETWID"), tr("%1").arg(m_ui->textEdit_Para1->toPlainText()));
+        } else {
+            QMessageBox::critical(this, tr("Error"), tr("All parameter must is double"));
+            return;
+        }
+    } else if(m_ui->checkBox_SetDuty->isChecked()) {
+        bool isInt_1, isInt_2;
+        m_ui->textEdit_Para1->toPlainText().toInt(&isInt_1);
+        m_ui->textEdit_Para2->toPlainText().toInt(&isInt_2);
+        if(isInt_1 & isInt_2) {
+            send_request(id_command, tr("SETDUTY"), tr("%1 %2").arg(m_ui->textEdit_Para1->toPlainText())
+                         .arg(m_ui->textEdit_Para2->toPlainText()));
+        } else {
+            QMessageBox::critical(this, tr("Error"), tr("All parameter must is int"));
+            return;
+        }
+
+    } else if(m_ui->checkBox_SetHome->isChecked()) {
+
+        send_request(id_command, tr("SETHOME"), tr(""));
+
+    } else if(m_ui->checkBox_Save->isChecked()) {
+
+        send_request(id_command, tr("SAVE"), tr(""));
+
+    } else {
+        QMessageBox::critical(this, tr("Error"), tr("No request to send"));
+    }
 }
 
 void MainWindow::serial_setDefault() {
@@ -171,12 +385,12 @@ void MainWindow::serial_updateSetting() {
     m_serial->setDataBits(static_cast<QSerialPort::DataBits>
                           (m_ui->comboBox_Databits->itemData(m_ui->comboBox_Databits->currentIndex()).toInt()));
     m_serial->setParity(static_cast<QSerialPort::Parity>
-                          (m_ui->comboBox_Parity->itemData(m_ui->comboBox_Parity->currentIndex()).toInt()));
+                        (m_ui->comboBox_Parity->itemData(m_ui->comboBox_Parity->currentIndex()).toInt()));
     m_serial->setStopBits(static_cast<QSerialPort::StopBits>
                           (m_ui->comboBox_Stopbits->itemData(m_ui->comboBox_Stopbits->currentIndex()).toInt()));
     m_serial->setFlowControl(static_cast<QSerialPort::FlowControl>
-                          (m_ui->comboBox_Flowcontrol->itemData(m_ui->comboBox_Flowcontrol->currentIndex()).toInt()));
-//    qDebug() << m_serial->portName() << m_serial->baudRate();
+                             (m_ui->comboBox_Flowcontrol->itemData(m_ui->comboBox_Flowcontrol->currentIndex()).toInt()));
+    //    qDebug() << m_serial->portName() << m_serial->baudRate();
 }
 
 void MainWindow::serial_updatePortName() {
@@ -246,7 +460,9 @@ void MainWindow::serial_openPort() {
 
 void MainWindow::serial_write(const QByteArray &data) {
     if(m_serial->isOpen()) {
-        m_serial->write(data);
+        serial_pack(data);
+        m_serial->write(m_dataserial);
+        logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
     } else {
         QMessageBox::critical(this, tr("Error"), tr("No device connected"));
     }
@@ -254,23 +470,31 @@ void MainWindow::serial_write(const QByteArray &data) {
 
 void MainWindow::serial_read() {
     if(m_serial->isOpen()) {
-        const QByteArray data = m_serial->readAll();
-        const QString string = QString::fromStdString(data.toStdString());
-        logs_write(string, Qt::blue);
+        QByteArray data = m_serial->readAll();
+        while(data.lastIndexOf(0x7E) != 0) {
+            QByteArray temp = data.mid(data.lastIndexOf(0x7E));
+            data.remove(data.lastIndexOf(0x7E), data.length());
+            serial_unpack(temp);
+            logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
+        }
+        serial_unpack(data);
+        logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
     } else {
         QMessageBox::critical(this, tr("Error"), tr("No device connected"));
     }
 }
 
 void MainWindow::logs_write(const QString &message, const QColor &c) {
-    m_ui->textEdit->setTextColor(c);
-    m_ui->textEdit->insertPlainText(message);
-    m_ui->textEdit->insertPlainText("\n");
+    m_ui->textEdit_logs->setTextColor(c);
+    m_ui->textEdit_logs->insertPlainText(message);
+    m_ui->textEdit_logs->insertPlainText("\n");
 }
 
 void MainWindow::logs_clear() {
-    m_ui->textEdit->clear();
+    m_ui->textEdit_logs->clear();
 }
+
+
 
 void MainWindow::on_pushButton_Serial_Default_clicked()
 {
@@ -288,13 +512,6 @@ void MainWindow::on_pushButton_Serial_Connect_clicked()
 
 }
 
-void MainWindow::on_pushButton_Test_clicked()
-{
-    const QString text = "nam dep trai";
-    serial_write(text.toLocal8Bit());
-
-}
-
 void MainWindow::on_pushButton_Camera_Connect_clicked()
 {
     if( m_ui->pushButton_Camera_Connect->text() == "Connect") {
@@ -302,4 +519,13 @@ void MainWindow::on_pushButton_Camera_Connect_clicked()
     } else {
         camera_closeCamera();
     }
+}
+
+void MainWindow::on_pushButton_Request_clicked()
+{
+    //    QByteArray test = QByteArrayLiteral("\x7D\x00\xa4\x42\x51\x00\x7E\x7F");
+    //    QByteArray test("nam dep trai");
+//    send_request(id_command, tr("SETPOS"), tr("10.5 5.0 6"));
+//    send_request(id_command, tr("SETWID"), tr("3"));
+    manual_checkPara_sendRequest();
 }
