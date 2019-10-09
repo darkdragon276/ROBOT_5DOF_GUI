@@ -81,7 +81,7 @@ private: //opencv processing
     void cv_process_image();
     void cv_qtshow(Mat img, QImage::Format format);
 
-private: //api for controll robot
+private: //request for controll robot
     void send_request(int &idcommand, const QString command, const QString para);
     int rec_respose(QByteArray mes);
 

@@ -110,28 +110,6 @@ void MainWindow::camera_init() {
     connect(timer_frame, &QTimer::timeout, this, &MainWindow::cv_process_image);
 }
 
-void MainWindow::cv_process_image() {
-    Mat frame;
-    m_camera >> frame;
-    if(frame.empty()) {
-        qDebug() << "frame empty";
-        camera_closeCamera();
-        return;
-    }
-    // process
-    cv_qtshow(frame, QImage::Format_RGB888);
-}
-
-void MainWindow::cv_qtshow(Mat img, QImage::Format format) {
-    Mat temp;
-    cvtColor(img, temp, COLOR_BGR2RGB);
-    QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
-    m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
-    temp.release();
-    img.release();
-    delete qimage;
-}
-
 void MainWindow::camera_openCamera() {
     m_camera.open(m_ui->comboBox_CameraDevice->currentIndex());
     if(m_camera.isOpened()) {
@@ -219,7 +197,7 @@ void MainWindow::serial_init() {
     serial_updatePortName();
     serial_setDefault();
     serial_updateSetting();
-    statusBar_Message(tr("Disconnected"));
+    statusBar_Message(tr("No Robot Device is Connected"));
 
     connect(m_ui->comboBox_Comport, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
     connect(m_ui->comboBox_Baudrate, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
@@ -435,10 +413,10 @@ void MainWindow::serial_closePort() {
         m_ui->pushButton_Serial_Connect->setText("Connect");
         m_ui->pushButton_Serial_Default->setEnabled(true);
         timer_serial->start(1000);
-        statusBar_Message(tr("Disconnected"));
+        statusBar_Message(tr("No Robot Device is Connected"));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        statusBar_Message(tr("Disconnected"));
+        statusBar_Message(tr("No Robot Device is Connected"));
     }
 }
 
