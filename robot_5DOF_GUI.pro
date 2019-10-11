@@ -35,4 +35,4 @@ FORMS += \
         mainwindow.ui
 # OpenCV
 INCLUDEPATH += /usr/local/include/opencv4
-LIBS += -L/usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_highgui -lopencv_videoio -lopencv_imgproc
+LIBS += -L/usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_videoio -lopencv_imgproc -lopencv_calib3d

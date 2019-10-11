@@ -11,9 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
     m_ui->statusBar->addWidget(m_status);
 
     serial_init();
-
     camera_init();
-
     timer_init();
 }
 
@@ -22,92 +20,8 @@ MainWindow::~MainWindow()
     delete m_ui;
     delete m_serial;
     delete m_status;
-    delete timer_camera;
-    delete timer_serial;
-}
-
-void MainWindow::send_request(int &idcommand, const QString command, const QString para) {
-    idcommand++;
-    QByteArray request;
-    request.clear();
-    if(command.isEmpty()) {
-        QMessageBox::critical(this, tr("Critical Error"), tr("command is null/empty"));
-        return;
-    }
-    if(para.isEmpty()) {
-        request.append(tr("%1 %2").arg(QString::number(idcommand))
-                       .arg(command));
-    } else {
-        request.append(tr("%1 %2 %3").arg(QString::number(idcommand))
-                       .arg(command).arg(para));
-    }
-    serial_write(request);
-}
-
-void MainWindow::serial_pack(const QByteArray &data)
-{
-    if(data.isNull() || data.isEmpty()) {
-        logs_write(tr("data input of pack function is null/empty"), Qt::red);
-        return;
-    }
-    // packing
-    m_mutex.lock();
-    m_dataserial.clear();
-    m_dataserial.append(data);
-    int len = m_dataserial.length();
-    m_dataserial.push_front((char)0x7E);
-    while(len) {
-        int i = m_dataserial.length()-len;
-        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
-                m_dataserial.at(i) == (char)0x7F) {
-            char temp = m_dataserial.at(i);
-            temp ^= (char)0x02;
-            m_dataserial.remove(i, 1);
-            m_dataserial.insert(i, temp);
-            m_dataserial.insert(i, 0x7D);
-        }
-        len--;
-    }
-    m_dataserial.push_back((char)0x7F);
-    m_mutex.unlock();
-}
-
-void MainWindow::serial_unpack(const QByteArray &data)
-{
-    if(data.isNull() || data.isEmpty()) {
-        logs_write(tr("data input of pack function is null/empty"), Qt::red);
-        return;
-    }
-    if(data.at(0) != 0x7E || data.at(data.length()-1) != 0x7F) {
-        logs_write(tr("frame error. not have begin/end character"), Qt::red);
-        return;
-    }
-
-    m_mutex.lock();
-    m_dataserial.clear();
-    m_dataserial.append(data);
-    m_dataserial.remove(0, 1);
-    m_dataserial.remove(m_dataserial.length()-1, 1);
-    int len = m_dataserial.length();
-    while(len) {
-        int i = m_dataserial.length()-len;
-        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
-                m_dataserial.at(i) == (char)0x7F) {
-            char temp = m_dataserial.at(i+1);
-            temp ^= (char)0x02;
-            m_dataserial.remove(i, 2);
-            m_dataserial.insert(i, temp);
-            len--;
-        }
-        len--;
-    }
-    m_mutex.unlock();
-}
-
-void MainWindow::camera_init() {
-    camera_updateDevice();
-    timer_frame = new QTimer(this);
-    connect(timer_frame, &QTimer::timeout, this, &MainWindow::cv_process_image);
+    delete timer_camera_comboBox;
+    delete timer_serial_comboBox;
 }
 
 void MainWindow::camera_openCamera() {
@@ -115,8 +29,8 @@ void MainWindow::camera_openCamera() {
     if(m_camera.isOpened()) {
         m_ui->comboBox_CameraDevice->setEnabled(false);
         m_ui->pushButton_Camera_Connect->setText(tr("Disconnect"));
-        timer_camera->stop();
-        timer_frame->start(20);
+        timer_camera_comboBox->stop();
+        timer_imgproc->start(DELAY_CAPTURE_20MS);
     } else {
         QMessageBox::critical(this, tr("Critical Error"), tr("error open camera"));
     }
@@ -127,21 +41,22 @@ void MainWindow::camera_closeCamera() {
     if(m_camera.isOpened()) {
         QMessageBox::critical(this, tr("Critical Error"), tr("error close camera"));
     } else {
-        timer_frame->stop();
-        timer_camera->start(1000);
+        timer_imgproc->stop();
+        timer_camera_comboBox->start(1000);
         m_ui->comboBox_CameraDevice->setEnabled(true);
         m_ui->pushButton_Camera_Connect->setText(tr("Connect"));
     }
 }
 
+// init timer of comboBox
 void MainWindow::timer_init() {
-    timer_serial = new QTimer(this);
-    connect(timer_serial, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
-    timer_serial->start(1000);
+    timer_serial_comboBox = new QTimer(this);
+    connect(timer_serial_comboBox, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
+    timer_serial_comboBox->start(1000);
 
-    timer_camera = new QTimer(this);
-    connect(timer_camera, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
-    timer_camera->start(1000);
+    timer_camera_comboBox = new QTimer(this);
+    connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
+    timer_camera_comboBox->start(1000);
 }
 
 void MainWindow::camera_updateDevice() {
@@ -167,6 +82,7 @@ void MainWindow::camera_updateDevice() {
     }
 }
 
+// serial function
 void MainWindow::serial_init() {
     m_ui->comboBox_Baudrate->addItem(QStringLiteral("9600"), QSerialPort::Baud9600);
     m_ui->comboBox_Baudrate->addItem(QStringLiteral("19200"), QSerialPort::Baud19200);
@@ -412,7 +328,7 @@ void MainWindow::serial_closePort() {
         m_ui->groupBox_SerialSetting->setEnabled(true);
         m_ui->pushButton_Serial_Connect->setText("Connect");
         m_ui->pushButton_Serial_Default->setEnabled(true);
-        timer_serial->start(1000);
+        timer_serial_comboBox->start(1000);
         statusBar_Message(tr("No Robot Device is Connected"));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
@@ -425,7 +341,7 @@ void MainWindow::serial_openPort() {
         m_ui->groupBox_SerialSetting->setEnabled(false);
         m_ui->pushButton_Serial_Connect->setText("Disconnect");
         m_ui->pushButton_Serial_Default->setEnabled(false);
-        timer_serial->stop();
+        timer_serial_comboBox->stop();
         statusBar_Message(tr("Connected to %1 : %2, %3, %4, %5, %6")
                           .arg(m_ui->comboBox_Comport->currentText()).arg(m_ui->comboBox_Baudrate->currentText())
                           .arg(m_ui->comboBox_Parity->currentText()).arg(m_ui->comboBox_Parity->currentText())
@@ -462,6 +378,84 @@ void MainWindow::serial_read() {
     }
 }
 
+void MainWindow::send_request(int &idcommand, const QString command, const QString para) {
+    idcommand++;
+    QByteArray request;
+    request.clear();
+    if(command.isEmpty()) {
+        QMessageBox::critical(this, tr("Critical Error"), tr("command is null/empty"));
+        return;
+    }
+    if(para.isEmpty()) {
+        request.append(tr("%1 %2").arg(QString::number(idcommand))
+                       .arg(command));
+    } else {
+        request.append(tr("%1 %2 %3").arg(QString::number(idcommand))
+                       .arg(command).arg(para));
+    }
+    serial_write(request);
+}
+
+void MainWindow::serial_pack(const QByteArray &data)
+{
+    if(data.isNull() || data.isEmpty()) {
+        logs_write(tr("data input of pack function is null/empty"), Qt::red);
+        return;
+    }
+    // packing
+    m_mutex.lock();
+    m_dataserial.clear();
+    m_dataserial.append(data);
+    int len = m_dataserial.length();
+    m_dataserial.push_front((char)0x7E);
+    while(len) {
+        int i = m_dataserial.length()-len;
+        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
+                m_dataserial.at(i) == (char)0x7F) {
+            char temp = m_dataserial.at(i);
+            temp ^= (char)0x02;
+            m_dataserial.remove(i, 1);
+            m_dataserial.insert(i, temp);
+            m_dataserial.insert(i, 0x7D);
+        }
+        len--;
+    }
+    m_dataserial.push_back((char)0x7F);
+    m_mutex.unlock();
+}
+
+void MainWindow::serial_unpack(const QByteArray &data)
+{
+    if(data.isNull() || data.isEmpty()) {
+        logs_write(tr("data input of pack function is null/empty"), Qt::red);
+        return;
+    }
+    if(data.at(0) != 0x7E || data.at(data.length()-1) != 0x7F) {
+        logs_write(tr("frame error. not have begin/end character"), Qt::red);
+        return;
+    }
+
+    m_mutex.lock();
+    m_dataserial.clear();
+    m_dataserial.append(data);
+    m_dataserial.remove(0, 1);
+    m_dataserial.remove(m_dataserial.length()-1, 1);
+    int len = m_dataserial.length();
+    while(len) {
+        int i = m_dataserial.length()-len;
+        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
+                m_dataserial.at(i) == (char)0x7F) {
+            char temp = m_dataserial.at(i+1);
+            temp ^= (char)0x02;
+            m_dataserial.remove(i, 2);
+            m_dataserial.insert(i, temp);
+            len--;
+        }
+        len--;
+    }
+    m_mutex.unlock();
+}
+
 void MainWindow::logs_write(const QString &message, const QColor &c) {
     m_ui->textEdit_logs->setTextColor(c);
     m_ui->textEdit_logs->insertPlainText(message);
@@ -471,8 +465,6 @@ void MainWindow::logs_write(const QString &message, const QColor &c) {
 void MainWindow::logs_clear() {
     m_ui->textEdit_logs->clear();
 }
-
-
 
 void MainWindow::on_pushButton_Serial_Default_clicked()
 {
@@ -503,7 +495,18 @@ void MainWindow::on_pushButton_Request_clicked()
 {
     //    QByteArray test = QByteArrayLiteral("\x7D\x00\xa4\x42\x51\x00\x7E\x7F");
     //    QByteArray test("nam dep trai");
-//    send_request(id_command, tr("SETPOS"), tr("10.5 5.0 6"));
-//    send_request(id_command, tr("SETWID"), tr("3"));
+    //    send_request(id_command, tr("SETPOS"), tr("10.5 5.0 6"));
+    //    send_request(id_command, tr("SETWID"), tr("3"));
     manual_checkPara_sendRequest();
+}
+
+void MainWindow::on_pushButton_Calib_clicked()
+{
+    if(m_ui->pushButton_Calib->text() == "Calib") {
+        m_ui->pushButton_Calib->setText("Cancel calib");
+        imgproc_ctrl_flag = IMGPROC_CALIB;
+    } else {
+        m_ui->pushButton_Calib->setText("Calib");
+        imgproc_ctrl_flag = IMGPROC_SHOW;
+    }
 }
