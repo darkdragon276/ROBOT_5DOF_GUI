@@ -493,20 +493,7 @@ void MainWindow::on_pushButton_Camera_Connect_clicked()
 
 void MainWindow::on_pushButton_Request_clicked()
 {
-    //    QByteArray test = QByteArrayLiteral("\x7D\x00\xa4\x42\x51\x00\x7E\x7F");
-    //    QByteArray test("nam dep trai");
-    //    send_request(id_command, tr("SETPOS"), tr("10.5 5.0 6"));
-    //    send_request(id_command, tr("SETWID"), tr("3"));
     manual_checkPara_sendRequest();
 }
 
-void MainWindow::on_pushButton_Calib_clicked()
-{
-    if(m_ui->pushButton_Calib->text() == "Calib") {
-        m_ui->pushButton_Calib->setText("Cancel calib");
-        imgproc_ctrl_flag = IMGPROC_CALIB;
-    } else {
-        m_ui->pushButton_Calib->setText("Calib");
-        imgproc_ctrl_flag = IMGPROC_SHOW;
-    }
-}
+

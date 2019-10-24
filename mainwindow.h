@@ -19,6 +19,11 @@
 #include <QMutex>
 #include <QThread>
 
+#include <math.h>
+#include <stdio.h>
+
+#define PI 3.14159265
+
 Q_DECLARE_METATYPE(QCameraInfo)
 
 using namespace cv;
@@ -43,7 +48,7 @@ public:
         IMGPROC_CALIB,
         IMGPROC_AUTO,
     } ImgProc_Ctrl_Flag_t;
-// pushButton slot
+    // pushButton slot
 private slots:
 
     void on_pushButton_Serial_Default_clicked();
@@ -87,17 +92,60 @@ private: //support
     void logs_write(const QString &message, const QColor &c);
     void timer_init();
 
-private: //opencv processing
-    void cv_process_image();
-    void cv_qtshow(Mat img, QImage::Format format);
-    void cv_calib();
-    vector<double> cv_ideal2Real_Cordinate(vector<Point2f> &idealPoints, vector<Point2f> &realPoints);
-    void cv_debug(auto mat);
-
-
 private: //request for controll robot
     void send_request(int &idcommand, const QString command, const QString para);
     int rec_respose(QByteArray mes);
+
+private: //opencv processing
+
+    void cv_qtshow(Mat img, QImage::Format format);
+
+    void cv_debug(auto mat, const string tag);
+    void cv_calibrateCamera( vector<vector<Point2f>> listImagePoints,
+                             vector<vector<Point3f>> listRealPoints,
+                             Size imageSize, const string &fileName);
+
+    void cv_getPattern2CalibCamera(Mat grayImage, float realPointDistance, Size patternSize,
+                                    vector<vector<Point2f>> &listImagePoints,
+                                    vector<vector<Point3f>> &listRealPoints );
+
+    void cv_getPattern2CalibRobot(Mat grayImage, float realPointDistance, Size patternSize,
+                                  vector<Point2f> &imagePoints, vector<Point2f> &realPoints);
+
+    Mat cv_getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
+
+    void cv_calibrateRobot( vector<Point2f> vecImagePoints, vector<Point2f> vecRobotPoints,
+                            const string &fileName);
+signals:
+    void cv_signalCalib();
+    void cv_signalShow();
+    void cv_signalAutoRun();
+
+private slots:
+    void cv_calib();
+    void cv_show();
+    void cv_autoRun();
+
+private:
+    enum cv_matrixNote{
+        CamMat = 0,
+        DistMat,
+        R1to0Mat,
+        T1to0Mat,
+        S1toMat,
+        IntrFilePath,
+        CordiConvertFilePath,
+        NumOfMat,
+    };
+    const char* getNote[NumOfMat] = {
+        "CameraIntrincyMatrix",
+        "DistortExtrincyMatrix",
+        "CordinatesRotateMatrix",
+        "CordinatesTranferMatrix",
+        "CordinatesScaleMatrix",
+        "cameraMatrix.yml",
+        "robotMatrix.yml"
+    };
 
 private:
     Ui::MainWindow *m_ui = nullptr;
@@ -113,13 +161,8 @@ private:
 
     VideoCapture m_camera;
     QTimer *timer_imgproc = nullptr;
-    ImgProc_Ctrl_Flag_t imgproc_ctrl_flag;
+    Mat cv_image;
 
-
-
-
-private:
-    // function and varaiable of opencv
 };
 
 #endif // MAINWINDOW_H
