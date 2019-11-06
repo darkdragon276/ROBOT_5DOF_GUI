@@ -13,6 +13,7 @@ MainWindow::MainWindow(QWidget *parent) :
     serial_init();
     camera_init();
     timer_init();
+    robot_init();
 }
 
 MainWindow::~MainWindow()
@@ -113,7 +114,7 @@ void MainWindow::serial_init() {
     serial_updatePortName();
     serial_setDefault();
     serial_updateSetting();
-    statusBar_Message(tr("No Robot Device is Connected"));
+    statusBar_Message(tr("No Robot Device"));
 
     connect(m_ui->comboBox_Comport, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
     connect(m_ui->comboBox_Baudrate, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
@@ -222,9 +223,12 @@ void MainWindow::manual_checkPara_sendRequest() {
         m_ui->textEdit_Para2->toPlainText().toDouble(&isDouble_2);
         m_ui->textEdit_Para3->toPlainText().toDouble(&isDouble_3);
         if(isDouble_1 & isDouble_2 & isDouble_3) {
-            send_request(id_command, tr("SETPOS"), tr("%1 %2 %3").arg(m_ui->textEdit_Para1->toPlainText())
-                         .arg(m_ui->textEdit_Para2->toPlainText())
-                         .arg(m_ui->textEdit_Para3->toPlainText()));
+            if( robot_sendResq( SetPosition, tr("%1 %2 %3")
+                                .arg(m_ui->textEdit_Para1->toPlainText())
+                                .arg(m_ui->textEdit_Para2->toPlainText())
+                                .arg(m_ui->textEdit_Para3->toPlainText())) == false ) {
+                return;
+            }
         } else {
             QMessageBox::critical(this, tr("Error"), tr("All parameter must is double"));
             return;
@@ -233,7 +237,10 @@ void MainWindow::manual_checkPara_sendRequest() {
         bool isDouble;
         m_ui->textEdit_Para1->toPlainText().toDouble(&isDouble);
         if(isDouble) {
-            send_request(id_command, tr("SETWID"), tr("%1").arg(m_ui->textEdit_Para1->toPlainText()));
+            if( robot_sendResq( SetWidth, tr("%1")
+                                .arg(m_ui->textEdit_Para1->toPlainText())) == false ) {
+                return;
+            }
         } else {
             QMessageBox::critical(this, tr("Error"), tr("All parameter must is double"));
             return;
@@ -243,8 +250,11 @@ void MainWindow::manual_checkPara_sendRequest() {
         m_ui->textEdit_Para1->toPlainText().toInt(&isInt_1);
         m_ui->textEdit_Para2->toPlainText().toInt(&isInt_2);
         if(isInt_1 & isInt_2) {
-            send_request(id_command, tr("SETDUTY"), tr("%1 %2").arg(m_ui->textEdit_Para1->toPlainText())
-                         .arg(m_ui->textEdit_Para2->toPlainText()));
+            if( robot_sendResq( SetDuty, tr("%1 %2")
+                                .arg(m_ui->textEdit_Para1->toPlainText())
+                                .arg(m_ui->textEdit_Para2->toPlainText())) == false ) {
+                return;
+            }
         } else {
             QMessageBox::critical(this, tr("Error"), tr("All parameter must is int"));
             return;
@@ -252,11 +262,15 @@ void MainWindow::manual_checkPara_sendRequest() {
 
     } else if(m_ui->checkBox_SetHome->isChecked()) {
 
-        send_request(id_command, tr("SETHOME"), tr(""));
+        if(robot_sendResq(SetHome, tr("")) == false ) {
+            return;
+        }
 
     } else if(m_ui->checkBox_Save->isChecked()) {
 
-        send_request(id_command, tr("SAVE"), tr(""));
+        if(robot_sendResq(Save, tr("")) == false ) {
+            return;
+        }
 
     } else {
         QMessageBox::critical(this, tr("Error"), tr("No request to send"));
@@ -329,10 +343,10 @@ void MainWindow::serial_closePort() {
         m_ui->pushButton_Serial_Connect->setText("Connect");
         m_ui->pushButton_Serial_Default->setEnabled(true);
         timer_serial_comboBox->start(1000);
-        statusBar_Message(tr("No Robot Device is Connected"));
+        statusBar_Message(tr("No Robot Device"));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        statusBar_Message(tr("No Robot Device is Connected"));
+        statusBar_Message(tr("No Robot Device"));
     }
 }
 
@@ -352,111 +366,203 @@ void MainWindow::serial_openPort() {
     }
 }
 
-void MainWindow::serial_write(const QByteArray &data) {
+bool MainWindow::serial_write(QByteArray &data) {
+    const char* tag = __FUNCTION__;
     if(m_serial->isOpen()) {
-        serial_pack(data);
-        m_serial->write(m_dataserial);
-        logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
+        if( serial_pack(data) == false ) {
+            cv_debug("error pack", tag);
+            return false;
+        }
+        m_serial->write(data);
+        cv_debug(QString::fromLocal8Bit(data).toStdString().c_str(), tag);
     } else {
+        cv_debug("no device", tag);
         QMessageBox::critical(this, tr("Error"), tr("No device connected"));
+        return false;
     }
+    return true;
 }
 
 void MainWindow::serial_read() {
+    const char* tag = __FUNCTION__;
     if(m_serial->isOpen()) {
         QByteArray data = m_serial->readAll();
-        while(data.lastIndexOf(0x7E) != 0) {
+        while(data.lastIndexOf(0x7E) != -1) {
             QByteArray temp = data.mid(data.lastIndexOf(0x7E));
             data.remove(data.lastIndexOf(0x7E), data.length());
-            serial_unpack(temp);
-            logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
+            if( serial_unpack(temp) == false ) {
+                cv_debug(" error unpack", tag);
+                return;
+            }
+            robot_readResponse(QString::fromLocal8Bit(temp));
         }
-        serial_unpack(data);
-        logs_write(QString::fromLocal8Bit(m_dataserial), Qt::red);
     } else {
+        cv_debug("no device", tag);
         QMessageBox::critical(this, tr("Error"), tr("No device connected"));
-    }
-}
-
-void MainWindow::send_request(int &idcommand, const QString command, const QString para) {
-    idcommand++;
-    QByteArray request;
-    request.clear();
-    if(command.isEmpty()) {
-        QMessageBox::critical(this, tr("Critical Error"), tr("command is null/empty"));
         return;
     }
-    if(para.isEmpty()) {
-        request.append(tr("%1 %2").arg(QString::number(idcommand))
-                       .arg(command));
-    } else {
-        request.append(tr("%1 %2 %3").arg(QString::number(idcommand))
-                       .arg(command).arg(para));
-    }
-    serial_write(request);
 }
 
-void MainWindow::serial_pack(const QByteArray &data)
+bool MainWindow::serial_pack(QByteArray &data)
 {
+    const char* tag = __FUNCTION__;
     if(data.isNull() || data.isEmpty()) {
-        logs_write(tr("data input of pack function is null/empty"), Qt::red);
-        return;
+        cv_debug("data input is empty", tag);
+        return false;
     }
     // packing
-    m_mutex.lock();
-    m_dataserial.clear();
-    m_dataserial.append(data);
-    int len = m_dataserial.length();
-    m_dataserial.push_front((char)0x7E);
+    QByteArray temp;
+    temp.append(data);
+    int len = temp.length();
+    temp.push_front((char)0x7E);
     while(len) {
-        int i = m_dataserial.length()-len;
-        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
-                m_dataserial.at(i) == (char)0x7F) {
-            char temp = m_dataserial.at(i);
-            temp ^= (char)0x02;
-            m_dataserial.remove(i, 1);
-            m_dataserial.insert(i, temp);
-            m_dataserial.insert(i, 0x7D);
+        int i = temp.length()-len;
+        if (temp.at(i) == (char)0x7D || temp.at(i) == (char)0x7E ||
+                temp.at(i) == (char)0x7F) {
+            char mem = temp.at(i);
+            mem ^= (char)0x02;
+            temp.remove(i, 1);
+            temp.insert(i, mem);
+            temp.insert(i, 0x7D);
         }
         len--;
     }
-    m_dataserial.push_back((char)0x7F);
-    m_mutex.unlock();
+    temp.push_back((char)0x7F);
+    data.clear();
+    data.append(temp);
+    temp.clear();
+    return true;
 }
 
-void MainWindow::serial_unpack(const QByteArray &data)
+bool MainWindow::serial_unpack(QByteArray &data)
 {
+    const char* tag = __FUNCTION__;
     if(data.isNull() || data.isEmpty()) {
-        logs_write(tr("data input of pack function is null/empty"), Qt::red);
-        return;
+        cv_debug("data input is null", tag);
+        return false;
     }
     if(data.at(0) != 0x7E || data.at(data.length()-1) != 0x7F) {
-        logs_write(tr("frame error. not have begin/end character"), Qt::red);
-        return;
+        cv_debug("begin and end charater isn't 0x7E and 0x7F", tag);
+        return false;
     }
+    QByteArray temp;
 
-    m_mutex.lock();
-    m_dataserial.clear();
-    m_dataserial.append(data);
-    m_dataserial.remove(0, 1);
-    m_dataserial.remove(m_dataserial.length()-1, 1);
-    int len = m_dataserial.length();
+    temp.append(data);
+    temp.remove(0, 1);
+    temp.remove(temp.length()-1, 1);
+    int len = temp.length();
     while(len) {
-        int i = m_dataserial.length()-len;
-        if (m_dataserial.at(i) == (char)0x7D || m_dataserial.at(i) == (char)0x7E ||
-                m_dataserial.at(i) == (char)0x7F) {
-            char temp = m_dataserial.at(i+1);
-            temp ^= (char)0x02;
-            m_dataserial.remove(i, 2);
-            m_dataserial.insert(i, temp);
+        int i = temp.length()-len;
+        if (temp.at(i) == (char)0x7D || temp.at(i) == (char)0x7E ||
+                temp.at(i) == (char)0x7F) {
+            char mem = temp.at(i+1);
+            mem ^= (char)0x02;
+            temp.remove(i, 2);
+            temp.insert(i, mem);
             len--;
         }
         len--;
     }
-    m_mutex.unlock();
+    data.clear();
+    data.append(temp);
+    temp.clear();
+    return true;
 }
 
-void MainWindow::logs_write(const QString &message, const QColor &c) {
+void MainWindow::robot_init() {
+    connect(this, QOverload<int, robot_status>::of(&MainWindow::robot_signalEmit),
+            this, &MainWindow::robot_ctrlResq);
+}
+
+MainWindow::robot_status MainWindow::robot_getStt(int idCmd) {
+    return m_robotStt.at(idCmd);
+}
+
+void MainWindow::robot_ctrlResq(int idCmd, robot_status stt) {
+    // handle id_command
+    const string tag = __FUNCTION__;
+    if( m_robotStt.length() > idCmd) {
+        m_robotStt.replace(idCmd, stt);
+    } else {
+        m_robotStt.push_back(stt);
+    }
+
+    switch(stt) {
+    case RobotReq:
+        //        cv_debug(tr("%1 send request").arg(idCmd).toStdString().c_str(), tag);
+        id_command++;
+        if( id_command > 50 )
+        {
+            id_command = 0;
+        }
+        break;
+    case RobotProc:
+        //        cv_debug(tr("%1 processing").arg(idCmd).toStdString().c_str(), tag);
+        break;
+    case RobotDone:
+        //        cv_debug(tr("%1 done").arg(idCmd).toStdString().c_str(), tag);
+        break;
+    case RobotErrArg:
+        //        cv_debug(tr("%1 error parameter send").arg(idCmd).toStdString().c_str(), tag);
+        break;
+    case RobotErr:
+        //        cv_debug(tr("%1 error robot").arg(idCmd).toStdString().c_str(), tag);
+        break;
+    default:
+        //        cv_debug(tr("%1 non exit stt").arg(idCmd).toStdString().c_str(), tag);
+        break;
+    }
+}
+
+void MainWindow::robot_readResponse(QString res) {
+    const string tag = __FUNCTION__;
+    QStringList listRes = res.split(QRegExp("[:]"), QString::SplitBehavior::SkipEmptyParts );
+    logs_write(res, Qt::red);
+    int idCmd = listRes.at(0).toInt();
+    if( listRes.at(1) == getStatus[RobotDone]) {
+        emit robot_signalEmit(idCmd, RobotDone);
+
+    } else if(listRes.at(1) == getStatus[RobotProc]) {
+        emit robot_signalEmit(idCmd, RobotProc);
+
+    } else if(listRes.at(1) == getStatus[RobotErrArg]) {
+        emit robot_signalEmit(idCmd, RobotErrArg);
+
+    } else if(listRes.at(1) == getStatus[RobotReq]) {
+        emit robot_signalEmit(idCmd, RobotReq);
+    } else if(listRes.at(1) == getStatus[RobotErr]) {
+        emit robot_signalEmit(idCmd, RobotErr);
+    } else {
+        cv_debug("response can't read", tag);
+    }
+}
+
+bool MainWindow::robot_sendResq(cv_commandString cmd, const QString para) {
+    const string tag = __FUNCTION__;
+    QByteArray request;
+    request.clear();
+    if(para == "") {
+        request.append(tr("%1 %2").arg(QString::number(id_command))
+                       .arg(getCommand[cmd]));
+    } else {
+        request.append(tr("%1 %2 %3").arg(QString::number(id_command))
+                       .arg(getCommand[cmd]).arg(para));
+    }
+    logs_write(QString::fromLocal8Bit(request), Qt::blue);
+    if(serial_write(request) == false) {
+        cv_debug("serial write fail", tag);
+        return false;
+    }
+    emit robot_signalEmit(id_command, RobotReq);
+    return true;
+}
+
+void MainWindow::logs_write(QString message, QColor c) {
+    const char* tag = __FUNCTION__;
+    if( message.isEmpty() || message.isNull() ) {
+        cv_debug("log write error", tag);
+        return;
+    }
     m_ui->textEdit_logs->setTextColor(c);
     m_ui->textEdit_logs->insertPlainText(message);
     m_ui->textEdit_logs->insertPlainText("\n");
@@ -495,5 +601,3 @@ void MainWindow::on_pushButton_Request_clicked()
 {
     manual_checkPara_sendRequest();
 }
-
-

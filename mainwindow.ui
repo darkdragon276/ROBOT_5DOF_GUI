@@ -571,7 +571,7 @@
             </layout>
            </item>
            <item>
-            <widget class="QLabel" name="label_Camera_show">
+            <widget class="QLabel_custom" name="label_Camera_show">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                <horstretch>0</horstretch>
@@ -590,6 +590,9 @@
                <height>1080</height>
               </size>
              </property>
+             <property name="mouseTracking">
+              <bool>true</bool>
+             </property>
              <property name="autoFillBackground">
               <bool>true</bool>
              </property>
@@ -597,10 +600,10 @@
               <enum>QFrame::Box</enum>
              </property>
              <property name="frameShadow">
-              <enum>QFrame::Sunken</enum>
+              <enum>QFrame::Plain</enum>
              </property>
              <property name="lineWidth">
-              <number>1</number>
+              <number>0</number>
              </property>
              <property name="text">
               <string>Video</string>
@@ -626,9 +629,9 @@
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_TestCamera">
+              <widget class="QPushButton" name="pushButton_ShowCamera">
                <property name="text">
-                <string>Test Camera</string>
+                <string>Show Camera</string>
                </property>
               </widget>
              </item>
@@ -668,7 +671,27 @@
              <item>
               <widget class="QPushButton" name="pushButton_Run">
                <property name="text">
-                <string>Run</string>
+                <string>AutoRun</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_12">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="pushButton_SaveImg">
+               <property name="text">
+                <string>Save Image</string>
                </property>
               </widget>
              </item>
@@ -717,6 +740,13 @@
   <widget class="QStatusBar" name="statusBar"/>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>QLabel_custom</class>
+   <extends>QLabel</extends>
+   <header location="global">qlabel_custom.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>
