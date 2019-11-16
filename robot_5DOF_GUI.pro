@@ -27,11 +27,14 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
         imageprocess.cpp \
-    qlabel_custom.cpp
+    qlabel_custom.cpp \
+    robotcontroll.cpp
 
 HEADERS += \
         mainwindow.h \
-    qlabel_custom.h
+    qlabel_custom.h \
+    robotcontroll.h \
+    imageprocess.h
 
 FORMS += \
         mainwindow.ui
