@@ -43,10 +43,6 @@ private slots:
 
     void on_pushButton_Camera_Connect_clicked();
 
-    void on_pushButton_Calib_clicked();
-
-    void on_pushButton_Run_clicked();
-
     void on_pushButton_ShowCamera_clicked();
 
 private slots:
@@ -70,33 +66,29 @@ private:
     void camera_closeCamera();
 
 //support
-    void statusBar_Message(const QString &message);
     void logs_write(QString message, QColor c);
-    void timer_init();
 
 //opencv processing
     void cv_qtshow(Mat img, QImage::Format format);
-    void cv_debugImage( Mat image = Mat(), bool dynamic = false);
-    void cv_debug(auto mat, const string tag = "");
-    void cv_saveImageFromROI();
-    Mat cv_getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
+    void cv_debugImage(Mat image);
     bool cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para);
+
 signals:
-    void cv_signalCalib();
-    void cv_signalShow(bool dynamic = false);
-    void cv_signalAutoRun();
+    void cv_signalShow(bool dynamic = true);
 
 private slots:
-    void cv_calib();
+    void cv_getROI();                       // grab roi mouse released
+    void cv_saveImageFromROI();             // Button Save Image
+    void cv_timeout();                      // Timer 20ms get frame
     void cv_show(bool dynamic = false);
-    void cv_autoRun();
-    void cv_timeout();
-    void cv_getROI();
-    Mat  cv_getMatFromQPixmap(QPixmap pixmap);
+    void cv_calib();                        // Button calib
+    void cv_autoRun();                      // Button AutoRun
+
 
 private:
     Ui::MainWindow *m_ui = nullptr;
     RobotControll *m_serial = nullptr;
+    QThread *thread_serial;
     QLabel *m_status = nullptr;
 
     QTimer *timer_camera_comboBox = nullptr;
@@ -105,6 +97,7 @@ private:
     ImageProcess m_camera;
     QTimer *timer_imgproc = nullptr;
     Mat cv_image;
+
 
 };
 

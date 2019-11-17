@@ -389,8 +389,43 @@ void ImageProcess::setImage(Mat image)
     I_DEBUG("image is empty");
 }
 
+void ImageProcess::setHSVRange(Scalar _hsv_high, Scalar _hsv_low)
+{
+    hsv_high = _hsv_high;
+    hsv_low = _hsv_low;
+}
+
 void ImageProcess::getImage(Mat &image)
 {
     image.release();
     img.assignTo(image);
+}
+
+Mat ImageProcess::getMatFromQPixmap(QPixmap pixmap)
+{
+    QImage qimg = pixmap.toImage().convertToFormat(QImage::Format_RGB888).rgbSwapped();
+    return Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
+}
+
+Mat ImageProcess::getImageFromCamera( ColorConversionCodes flag) {
+    if(!this->isOpened()) {
+        I_DEBUG("camera is close");
+        return Mat();
+    }
+    Mat imageColor, imageConvert;
+    this->operator >>(imageColor);
+    if(flag == COLOR_BGR2BGRA) {
+        imageConvert.release();
+        return imageColor;
+    } else {
+        cvtColor(imageColor, imageConvert, flag);
+        imageColor.release();
+        return imageConvert;
+    }
+}
+
+void ImageProcess::preProcess()
+{
+    img = getImageFromCamera(COLOR_BGR2HSV);
+    inRange(img, hsv_low, hsv_high, img);
 }

@@ -14,10 +14,12 @@
 #include <sstream>
 #include <math.h>
 
+#include <QMainWindow>
 #include <QDebug>
 #include <QTimer>
 #include <QImage>
 #include <QtCore>
+#include <QPixmap>
 
 #define I_DEBUG(message)  ImageProcess::deBug(__FILE__, __LINE__, __FUNCTION__, message)
 
@@ -46,8 +48,8 @@ public:
 
 public: // static function don't need call object
     // unused
-    void basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res);
-    void avgVectorPoints(vector<Point2f> vecPoint, Point2f &means);
+    static void basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res);
+    static void avgVectorPoints(vector<Point2f> vecPoint, Point2f &means);
     static void hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                        vector<vector<int> > &pointInGroup_idx);
     static void drawRoiAroundObject(Mat imgObject, Mat imgScene, vector<Point2f> PointObject,
@@ -69,16 +71,24 @@ public: // static function don't need call object
     static void calibRobot(vector<Point2f> vecImagePoints, vector<Point2f> vecRobotPoints);
 
     static bool convertToRealPoint(Point2f imagePoint, Point2f &realPoint);
+
     static void gammaCorrectionContrast(Mat img, double gamma_, Mat &res);
 
     static void getMatFromFile(nodePath_t node, nodePath_t filepath,
                                 Mat &mat, bool debug = false);
+    static Mat getMatFromQPixmap(QPixmap pixmap);
+
 public: // non static function => must call object
     void getImage(Mat &image);
     void setImage(Mat image);
+    void setHSVRange(Scalar _hsv_high, Scalar _hsv_low);
+    Mat getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
+    void preProcess();
+
 
 private:
     Mat img;
+    Scalar hsv_high, hsv_low;
 };
 
 #endif // IMAGEPROCESS_H

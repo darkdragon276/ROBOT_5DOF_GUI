@@ -69,6 +69,9 @@ public:
     robotStatus_t getStatus();
     void resetId();
     bool isTimeOut();
+signals:
+    void commandTimeOut();
+    void commandWorkDone();
 
 private:
     bool packData(QByteArray &data);

@@ -1,8 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
-MainWindow::MainWindow(QWidget *parent) :
-    QMainWindow(parent),
+MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
     m_ui(new Ui::MainWindow),
     m_serial(new RobotControll(this)),
     m_status(new QLabel)
@@ -12,7 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     serial_init();
     camera_init();
-    timer_init();
+    m_serial->moveToThread(thread_serial);
 }
 
 MainWindow::~MainWindow()
@@ -22,16 +21,6 @@ MainWindow::~MainWindow()
     delete m_status;
     delete timer_camera_comboBox;
     delete timer_serial_comboBox;
-}
-// init timer of comboBox
-void MainWindow::timer_init() {
-    timer_serial_comboBox = new QTimer(this);
-    connect(timer_serial_comboBox, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
-    timer_serial_comboBox->start(1000);
-
-    timer_camera_comboBox = new QTimer(this);
-    connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
-    timer_camera_comboBox->start(1000);
 }
 
 // serial function
@@ -65,7 +54,7 @@ void MainWindow::serial_init() {
     serial_updatePortName();
     serial_setDefault();
     serial_updateSetting();
-    statusBar_Message(tr("No Robot Device"));
+    m_status->setText(tr("No Robot Device"));
 
     connect(m_ui->comboBox_Comport, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
     connect(m_ui->comboBox_Baudrate, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
@@ -93,6 +82,10 @@ void MainWindow::serial_init() {
     m_ui->label_Para4->hide();
     m_ui->textEdit_Para4->hide();
     m_ui->label_ManualExamplePara->setText("");
+
+    timer_serial_comboBox = new QTimer(this);
+    connect(timer_serial_comboBox, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
+    timer_serial_comboBox->start(1000);
 }
 
 void MainWindow::manual_checkBox_event(bool checked) {
@@ -337,10 +330,6 @@ void MainWindow::serial_updatePortName() {
     }
 }
 
-void MainWindow::statusBar_Message(const QString &message) {
-    m_status->setText(message);
-}
-
 void MainWindow::serial_handleError(QSerialPort::SerialPortError error)
 {
     if (error == QSerialPort::ResourceError) {
@@ -356,10 +345,10 @@ void MainWindow::serial_closePort() {
         m_ui->pushButton_Serial_Connect->setText("Connect");
         m_ui->pushButton_Serial_Default->setEnabled(true);
         timer_serial_comboBox->start(1000);
-        statusBar_Message(tr("No Robot Device"));
+        m_status->setText(tr("No Robot Device"));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        statusBar_Message(tr("No Robot Device"));
+        m_status->setText(tr("No Robot Device"));
     }
 }
 
@@ -369,13 +358,13 @@ void MainWindow::serial_openPort() {
         m_ui->pushButton_Serial_Connect->setText("Disconnect");
         m_ui->pushButton_Serial_Default->setEnabled(false);
         timer_serial_comboBox->stop();
-        statusBar_Message(tr("Connected to %1 : %2, %3, %4, %5, %6")
+        m_status->setText(tr("Connected to %1 : %2, %3, %4, %5, %6")
                           .arg(m_ui->comboBox_Comport->currentText()).arg(m_ui->comboBox_Baudrate->currentText())
                           .arg(m_ui->comboBox_Parity->currentText()).arg(m_ui->comboBox_Parity->currentText())
                           .arg(m_ui->comboBox_Stopbits->currentText()).arg(m_ui->comboBox_Flowcontrol->currentText()));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        statusBar_Message(tr("Open error"));
+        m_status->setText(tr("Open error"));
     }
 }
 
@@ -393,8 +382,41 @@ void MainWindow::logs_clear() {
     m_ui->textEdit_logs->clear();
 }
 
+void MainWindow::on_pushButton_Serial_Default_clicked()
+{
+    serial_setDefault();
+    serial_updateSetting();
+}
+
+void MainWindow::on_pushButton_Serial_Connect_clicked()
+{
+    if(m_ui->pushButton_Serial_Connect->text() == "Connect") {
+        serial_openPort();
+    } else {
+        serial_closePort();
+    }
+
+}
+
 // camera function
-void MainWindow::camera_updateDevice() {
+void MainWindow::camera_init()
+{
+    camera_updateDevice();
+    timer_imgproc = new QTimer(this);
+    connect(timer_imgproc, &QTimer::timeout, this, &MainWindow::cv_timeout);
+    connect(this, QOverload<bool>::of(&MainWindow::cv_signalShow), this, &MainWindow::cv_show);
+    connect(m_ui->pushButton_Calib,&QPushButton::clicked , this, &MainWindow::cv_calib);
+    connect(m_ui->pushButton_Run, &QPushButton::clicked, this, &MainWindow::cv_autoRun);
+    connect(m_ui->label_Camera_show, &QLabel_custom::mouseReleased, this, &MainWindow::cv_getROI);
+    connect(m_ui->pushButton_SaveImg, &QPushButton::clicked, this, &MainWindow::cv_saveImageFromROI);
+
+    timer_camera_comboBox = new QTimer(this);
+    connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
+    timer_camera_comboBox->start(1000);
+}
+
+void MainWindow::camera_updateDevice()
+{
     const QList<QCameraInfo> availableCameras = QCameraInfo::availableCameras();
     int count_port = availableCameras.count();
     int count_item = m_ui->comboBox_CameraDevice->count();
@@ -417,18 +439,8 @@ void MainWindow::camera_updateDevice() {
     }
 }
 
-void MainWindow::camera_init() {
-    camera_updateDevice();
-    timer_imgproc = new QTimer(this);
-    connect(timer_imgproc, &QTimer::timeout, this, &MainWindow::cv_timeout);
-    connect(this, QOverload<bool>::of(&MainWindow::cv_signalShow), this, &MainWindow::cv_show);
-    connect(this, &MainWindow::cv_signalCalib, this, &MainWindow::cv_calib);
-    connect(this, &MainWindow::cv_signalAutoRun, this, &MainWindow::cv_autoRun);
-    connect(m_ui->label_Camera_show, SIGNAL(mouseReleased()), this, SLOT(cv_getROI()));
-    connect(m_ui->pushButton_SaveImg, &QPushButton::clicked, this, &MainWindow::cv_saveImageFromROI);
-}
-
-void MainWindow::camera_openCamera() {
+void MainWindow::camera_openCamera()
+{
     m_camera.open(m_ui->comboBox_CameraDevice->currentIndex());
     if(m_camera.isOpened()) {
         m_ui->comboBox_CameraDevice->setEnabled(false);
@@ -440,7 +452,8 @@ void MainWindow::camera_openCamera() {
     }
 }
 
-void MainWindow::camera_closeCamera() {
+void MainWindow::camera_closeCamera()
+{
     m_camera.release();
     if(m_camera.isOpened()) {
         QMessageBox::critical(this, tr("Critical Error"), tr("error close camera"));
@@ -452,14 +465,33 @@ void MainWindow::camera_closeCamera() {
     }
 }
 
-void MainWindow::cv_timeout() {
-    cv_debugImage(Mat(), true);
+void MainWindow::cv_timeout()
+{
+    emit cv_signalShow(true);
 }
 
-void MainWindow::cv_autoRun() {
+void MainWindow::cv_show(bool dynamic) {
+    // stop timer timeout
+    if(dynamic) {
+        timer_imgproc->start(DELAY_CAPTURE_20MS);
+        Mat show_img;
+        m_camera.setImage(m_camera.getImageFromCamera());
+        m_camera.getImage(show_img);
+        cv_qtshow(show_img, QImage::Format_RGB888);
+    } else {
+        timer_imgproc->stop();
+        if(cv_image.empty()) {
+            I_DEBUG("cv_image is empty");
+            return;
+        }
+        cv_qtshow(cv_image, QImage::Format_RGB888);
+    }
+}
 
+void MainWindow::cv_autoRun()
+{
     Mat img_object = imread(ImageProcess::getNode(ImageProcess::PathObjectImageSave));
-    Mat img_scene = cv_getImageFromCamera();
+    Mat img_scene = m_camera.getImageFromCamera();
     ImageProcess::undistortImage(img_scene, img_scene);
     ImageProcess::gammaCorrectionContrast( img_scene, 0.4, img_scene);
 
@@ -555,23 +587,11 @@ void MainWindow::cv_autoRun() {
     */
 }
 
-void MainWindow::cv_show(bool dynamic) {
-    // stop timer timeout
-    if(dynamic) {
-        timer_imgproc->start(DELAY_CAPTURE_20MS);
-    }
 
-    if(cv_image.empty()) {
-        I_DEBUG("cv_image is empty");
-        return;
-    }
-    cv_qtshow(cv_image, QImage::Format_RGB888);
-    //tam thoi se khong hien thi duoc anh tu cv_image do timer chay lien tuc.
-}
 
 void MainWindow::cv_calib()
 {
-    const string tag = __FUNCTION__;
+    m_ui->pushButton_Calib->setEnabled(false);
     Size patternSize(8,6); //interior number of corners
     vector<vector<Point3f>> listRealPoints;
     vector<vector<Point2f>> listImagePoints;
@@ -580,7 +600,7 @@ void MainWindow::cv_calib()
     Mat grayImage;
     for(size_t i = 0; i < 10 ; i++ ) {
         QMessageBox::information(this, tr("Calib"), tr("move pattern (%1/10 images)").arg(i+1));
-        grayImage = cv_getImageFromCamera(COLOR_BGR2GRAY);
+        grayImage = m_camera.getImageFromCamera(COLOR_BGR2GRAY);
         if( ImageProcess::getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
                                       listImagePoints, listRealPoints) == false ) {
 
@@ -616,24 +636,8 @@ void MainWindow::cv_calib()
     m_ui->pushButton_Calib->setEnabled(true);
 }
 
-Mat MainWindow::cv_getImageFromCamera( ColorConversionCodes flag) {
-    if(!m_camera.isOpened()) {
-        I_DEBUG("camera is close");
-        return Mat();
-    }
-    Mat imageColor, imageConvert;
-    m_camera >> imageColor;
-    if(flag == COLOR_BGR2BGRA) {
-        imageConvert.release();
-        return imageColor;
-    } else {
-        cvtColor(imageColor, imageConvert, flag);
-        imageColor.release();
-        return imageConvert;
-    }
-}
-
-void MainWindow::cv_saveImageFromROI() {
+void MainWindow::cv_saveImageFromROI()
+{
     if(cv_image.empty()) {
         I_DEBUG("cv image is empty");
         return;
@@ -645,17 +649,20 @@ void MainWindow::cv_saveImageFromROI() {
 
 // emit signal to show image from input.
 // can use dynamic flag to show image for loop.
-void MainWindow::cv_debugImage( Mat image, bool dynamic) {
+void MainWindow::cv_debugImage( Mat image)
+{
     timer_imgproc->stop();
     if(image.empty()) {
-        cv_image = cv_getImageFromCamera();
+        I_DEBUG("input image debug empty");
+        return;
     } else {
-        cv_image = image.clone();
+        image.assignTo(cv_image);
     }
-    emit cv_signalShow(dynamic);
+    emit cv_signalShow(false);
 }
 
-void MainWindow::cv_qtshow(Mat img, QImage::Format format) {
+void MainWindow::cv_qtshow(Mat img, QImage::Format format)
+{
     Mat temp;
     cvtColor(img, temp, COLOR_BGR2RGB);
     QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
@@ -666,57 +673,33 @@ void MainWindow::cv_qtshow(Mat img, QImage::Format format) {
     delete qimage;
 }
 
-bool MainWindow::cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para) {
-    const string tag = __FUNCTION__;
+bool MainWindow::cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para)
+{
     if( m_serial->setCommand(cmd, 1000, para) == false) {
+        I_DEBUG("can't set command");
         return false;
     }
+    QEventLoop loop;
+    connect( m_serial, &RobotControll::commandWorkDone, &loop, &QEventLoop::quit );
+    connect( m_serial, &RobotControll::commandTimeOut, &loop, &QEventLoop::quit );
+    loop.exec();
+    if(m_serial->isTimeOut()) {
+        I_DEBUG("work haven't done yet");
+        return false;
+    }
+    I_DEBUG("command done");
     return true;
-}
-
-Mat MainWindow::cv_getMatFromQPixmap(QPixmap pixmap)
-{
-    QImage qimg = pixmap.toImage().convertToFormat(QImage::Format_RGB888).rgbSwapped();
-    return Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
 }
 
 void MainWindow::cv_getROI()
 {
     QRect rect = m_ui->label_Camera_show->getRect();
-    cv_image = cv_getMatFromQPixmap(m_ui->label_Camera_show->grab(rect));
-    cv_debugImage(cv_image);
-}
-
-void MainWindow::on_pushButton_Calib_clicked()
-{
-    m_ui->pushButton_Calib->setEnabled(false);
-    emit cv_signalCalib();
-}
-
-void MainWindow::on_pushButton_Run_clicked()
-{
-    emit cv_signalAutoRun();
+    cv_debugImage(m_camera.getMatFromQPixmap(m_ui->label_Camera_show->grab(rect)));
 }
 
 void MainWindow::on_pushButton_ShowCamera_clicked()
 {
     emit cv_signalShow(true);
-}
-
-void MainWindow::on_pushButton_Serial_Default_clicked()
-{
-    serial_setDefault();
-    serial_updateSetting();
-}
-
-void MainWindow::on_pushButton_Serial_Connect_clicked()
-{
-    if(m_ui->pushButton_Serial_Connect->text() == "Connect") {
-        serial_openPort();
-    } else {
-        serial_closePort();
-    }
-
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()

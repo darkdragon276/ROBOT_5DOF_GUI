@@ -114,6 +114,9 @@ void RobotControll::readData() {
                 return;
             }
             setStatus(temp);
+            if(robot_stt == RobotDone) {
+                emit commandWorkDone();
+            }
             //  NDEBUG(qbyteArray2string(temp));
         }
     } else {
@@ -124,6 +127,7 @@ void RobotControll::readData() {
 
 void RobotControll::timeOut()
 {
+    emit commandTimeOut();
     timeout->stop();
     istimeout = true;
 }
