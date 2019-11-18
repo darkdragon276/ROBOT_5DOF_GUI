@@ -9,9 +9,11 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
     m_ui->setupUi(this);
     m_ui->statusBar->addWidget(m_status);
 
+    //    thread_serial = new QThread(this);
+    //    thread_serial->start();
     serial_init();
     camera_init();
-    m_serial->moveToThread(thread_serial);
+
 }
 
 MainWindow::~MainWindow()
@@ -86,6 +88,54 @@ void MainWindow::serial_init() {
     timer_serial_comboBox = new QTimer(this);
     connect(timer_serial_comboBox, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
     timer_serial_comboBox->start(1000);
+}
+
+void MainWindow::serial_setDefault() {
+    m_ui->comboBox_Baudrate->setCurrentText("115200");
+    m_ui->comboBox_Databits->setCurrentText("8");
+    m_ui->comboBox_Parity->setCurrentText("None");
+    m_ui->comboBox_Stopbits->setCurrentText("1");
+    m_ui->comboBox_Flowcontrol->setCurrentText("None");
+}
+
+void MainWindow::serial_openPort() {
+    if(m_serial->open(QIODevice::ReadWrite)) {
+        m_ui->groupBox_SerialSetting->setEnabled(false);
+        m_ui->pushButton_Serial_Connect->setText("Disconnect");
+        m_ui->pushButton_Serial_Default->setEnabled(false);
+        timer_serial_comboBox->stop();
+        m_status->setText(tr("Connected to %1 : %2, %3, %4, %5, %6")
+                          .arg(m_ui->comboBox_Comport->currentText()).arg(m_ui->comboBox_Baudrate->currentText())
+                          .arg(m_ui->comboBox_Parity->currentText()).arg(m_ui->comboBox_Parity->currentText())
+                          .arg(m_ui->comboBox_Stopbits->currentText()).arg(m_ui->comboBox_Flowcontrol->currentText()));
+    } else {
+        QMessageBox::critical(this, tr("Error"), m_serial->errorString());
+        m_status->setText(tr("Open error"));
+    }
+}
+
+void MainWindow::serial_closePort() {
+    if(m_serial->isOpen()) {
+        m_serial->close();
+        m_ui->groupBox_SerialSetting->setEnabled(true);
+        m_ui->pushButton_Serial_Connect->setText("Connect");
+        m_ui->pushButton_Serial_Default->setEnabled(true);
+        timer_serial_comboBox->start(1000);
+        m_status->setText(tr("No Robot Device"));
+    } else {
+        QMessageBox::critical(this, tr("Error"), m_serial->errorString());
+        m_status->setText(tr("No Robot Device"));
+    }
+}
+
+void MainWindow::logs_write(QString message, QColor c) {
+    if( message.isEmpty() || message.isNull() ) {
+        I_DEBUG("log write error");
+        return;
+    }
+    m_ui->textEdit_logs->setTextColor(c);
+    m_ui->textEdit_logs->insertPlainText(message);
+    m_ui->textEdit_logs->insertPlainText("\n");
 }
 
 void MainWindow::manual_checkBox_event(bool checked) {
@@ -202,9 +252,9 @@ void MainWindow::manual_checkPara_setCommand() {
         m_ui->textEdit_Para3->toPlainText().toDouble(&isDouble_3);
         if(isDouble_1 & isDouble_2 & isDouble_3) {
             if( m_serial->setCommand( RobotControll::SetPosition, 1000, tr("%1 %2 %3")
-                                .arg(m_ui->textEdit_Para1->toPlainText())
-                                .arg(m_ui->textEdit_Para2->toPlainText())
-                                .arg(m_ui->textEdit_Para3->toPlainText())) == false ) {
+                                      .arg(m_ui->textEdit_Para1->toPlainText())
+                                      .arg(m_ui->textEdit_Para2->toPlainText())
+                                      .arg(m_ui->textEdit_Para3->toPlainText())) == false ) {
                 return;
             }
         } else {
@@ -216,7 +266,7 @@ void MainWindow::manual_checkPara_setCommand() {
         m_ui->textEdit_Para1->toPlainText().toDouble(&isDouble);
         if(isDouble) {
             if( m_serial->setCommand( RobotControll::SetWidth, 1000, tr("%1")
-                                .arg(m_ui->textEdit_Para1->toPlainText())) == false ) {
+                                      .arg(m_ui->textEdit_Para1->toPlainText())) == false ) {
                 return;
             }
         } else {
@@ -229,8 +279,8 @@ void MainWindow::manual_checkPara_setCommand() {
         m_ui->textEdit_Para2->toPlainText().toInt(&isInt_2);
         if(isInt_1 & isInt_2) {
             if( m_serial->setCommand( RobotControll::SetDuty, 1000, tr("%1 %2")
-                                .arg(m_ui->textEdit_Para1->toPlainText())
-                                .arg(m_ui->textEdit_Para2->toPlainText())) == false ) {
+                                      .arg(m_ui->textEdit_Para1->toPlainText())
+                                      .arg(m_ui->textEdit_Para2->toPlainText())) == false ) {
                 return;
             }
         } else {
@@ -251,10 +301,10 @@ void MainWindow::manual_checkPara_setCommand() {
         m_ui->textEdit_Para4->toPlainText().toInt(&isInt);
         if(isDouble_1 & isDouble_2 & isDouble_3 & isInt) {
             if( m_serial->setCommand( RobotControll::SetPositionWithArg, 1000, tr("%1 %2 %3 %4")
-                                .arg(m_ui->textEdit_Para1->toPlainText())
-                                .arg(m_ui->textEdit_Para2->toPlainText())
-                                .arg(m_ui->textEdit_Para3->toPlainText())
-                                .arg(m_ui->textEdit_Para4->toPlainText())) == false ) {
+                                      .arg(m_ui->textEdit_Para1->toPlainText())
+                                      .arg(m_ui->textEdit_Para2->toPlainText())
+                                      .arg(m_ui->textEdit_Para3->toPlainText())
+                                      .arg(m_ui->textEdit_Para4->toPlainText())) == false ) {
                 return;
             }
         } else {
@@ -266,7 +316,7 @@ void MainWindow::manual_checkPara_setCommand() {
         m_ui->textEdit_Para1->toPlainText().toDouble(&isInt);
         if(isInt) {
             if( m_serial->setCommand( RobotControll::SetTime, 1000, tr("%1")
-                                .arg(m_ui->textEdit_Para1->toPlainText())) == false ) {
+                                      .arg(m_ui->textEdit_Para1->toPlainText())) == false ) {
                 return;
             }
         } else {
@@ -281,30 +331,6 @@ void MainWindow::manual_checkPara_setCommand() {
     } else {
         QMessageBox::critical(this, tr("Error"), tr("No request to send"));
     }
-}
-
-void MainWindow::serial_setDefault() {
-    m_ui->comboBox_Baudrate->setCurrentText("115200");
-    m_ui->comboBox_Databits->setCurrentText("8");
-    m_ui->comboBox_Parity->setCurrentText("None");
-    m_ui->comboBox_Stopbits->setCurrentText("1");
-    m_ui->comboBox_Flowcontrol->setCurrentText("None");
-}
-
-void MainWindow::serial_updateSetting() {
-
-    m_serial->setPortName(m_ui->comboBox_Comport->currentText());
-    m_serial->setBaudRate(static_cast<QSerialPort::BaudRate>
-                          (m_ui->comboBox_Baudrate->itemData(m_ui->comboBox_Baudrate->currentIndex()).toInt()));
-    m_serial->setDataBits(static_cast<QSerialPort::DataBits>
-                          (m_ui->comboBox_Databits->itemData(m_ui->comboBox_Databits->currentIndex()).toInt()));
-    m_serial->setParity(static_cast<QSerialPort::Parity>
-                        (m_ui->comboBox_Parity->itemData(m_ui->comboBox_Parity->currentIndex()).toInt()));
-    m_serial->setStopBits(static_cast<QSerialPort::StopBits>
-                          (m_ui->comboBox_Stopbits->itemData(m_ui->comboBox_Stopbits->currentIndex()).toInt()));
-    m_serial->setFlowControl(static_cast<QSerialPort::FlowControl>
-                             (m_ui->comboBox_Flowcontrol->itemData(m_ui->comboBox_Flowcontrol->currentIndex()).toInt()));
-    //    qDebug() << m_serial->portName() << m_serial->baudRate();
 }
 
 void MainWindow::serial_updatePortName() {
@@ -330,52 +356,29 @@ void MainWindow::serial_updatePortName() {
     }
 }
 
+void MainWindow::serial_updateSetting() {
+
+    m_serial->setPortName(m_ui->comboBox_Comport->currentText());
+    m_serial->setBaudRate(static_cast<QSerialPort::BaudRate>
+                          (m_ui->comboBox_Baudrate->itemData(m_ui->comboBox_Baudrate->currentIndex()).toInt()));
+    m_serial->setDataBits(static_cast<QSerialPort::DataBits>
+                          (m_ui->comboBox_Databits->itemData(m_ui->comboBox_Databits->currentIndex()).toInt()));
+    m_serial->setParity(static_cast<QSerialPort::Parity>
+                        (m_ui->comboBox_Parity->itemData(m_ui->comboBox_Parity->currentIndex()).toInt()));
+    m_serial->setStopBits(static_cast<QSerialPort::StopBits>
+                          (m_ui->comboBox_Stopbits->itemData(m_ui->comboBox_Stopbits->currentIndex()).toInt()));
+    m_serial->setFlowControl(static_cast<QSerialPort::FlowControl>
+                             (m_ui->comboBox_Flowcontrol->itemData(m_ui->comboBox_Flowcontrol->currentIndex()).toInt()));
+    //    qDebug() << m_serial->portName() << m_serial->baudRate();
+}
+
+
 void MainWindow::serial_handleError(QSerialPort::SerialPortError error)
 {
     if (error == QSerialPort::ResourceError) {
         QMessageBox::critical(this, tr("Critical Error"), m_serial->errorString());
         serial_closePort();
     }
-}
-
-void MainWindow::serial_closePort() {
-    if(m_serial->isOpen()) {
-        m_serial->close();
-        m_ui->groupBox_SerialSetting->setEnabled(true);
-        m_ui->pushButton_Serial_Connect->setText("Connect");
-        m_ui->pushButton_Serial_Default->setEnabled(true);
-        timer_serial_comboBox->start(1000);
-        m_status->setText(tr("No Robot Device"));
-    } else {
-        QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        m_status->setText(tr("No Robot Device"));
-    }
-}
-
-void MainWindow::serial_openPort() {
-    if(m_serial->open(QIODevice::ReadWrite)) {
-        m_ui->groupBox_SerialSetting->setEnabled(false);
-        m_ui->pushButton_Serial_Connect->setText("Disconnect");
-        m_ui->pushButton_Serial_Default->setEnabled(false);
-        timer_serial_comboBox->stop();
-        m_status->setText(tr("Connected to %1 : %2, %3, %4, %5, %6")
-                          .arg(m_ui->comboBox_Comport->currentText()).arg(m_ui->comboBox_Baudrate->currentText())
-                          .arg(m_ui->comboBox_Parity->currentText()).arg(m_ui->comboBox_Parity->currentText())
-                          .arg(m_ui->comboBox_Stopbits->currentText()).arg(m_ui->comboBox_Flowcontrol->currentText()));
-    } else {
-        QMessageBox::critical(this, tr("Error"), m_serial->errorString());
-        m_status->setText(tr("Open error"));
-    }
-}
-
-void MainWindow::logs_write(QString message, QColor c) {
-    if( message.isEmpty() || message.isNull() ) {
-        I_DEBUG("log write error");
-        return;
-    }
-    m_ui->textEdit_logs->setTextColor(c);
-    m_ui->textEdit_logs->insertPlainText(message);
-    m_ui->textEdit_logs->insertPlainText("\n");
 }
 
 void MainWindow::logs_clear() {
@@ -413,30 +416,31 @@ void MainWindow::camera_init()
     timer_camera_comboBox = new QTimer(this);
     connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
     timer_camera_comboBox->start(1000);
-}
 
-void MainWindow::camera_updateDevice()
-{
-    const QList<QCameraInfo> availableCameras = QCameraInfo::availableCameras();
-    int count_port = availableCameras.count();
-    int count_item = m_ui->comboBox_CameraDevice->count();
+    connect(m_ui->horizontalSlider_alpha, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
+    connect(m_ui->horizontalSlider_beta, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
+    connect(m_ui->horizontalSlider_gamma, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
+    connect(m_ui->horizontalSlider_BasicBinaryThresh, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
 
-    if(count_port < count_item) {
-        for(int i = count_port; i < count_item; i++) {
-            m_ui->comboBox_CameraDevice->removeItem(i);
-        }
-        count_item = count_port;
-    } else if(count_port > count_item) {
-        for(int i = count_item; i < count_port; i++) {
-            m_ui->comboBox_CameraDevice->addItem(availableCameras.at(i).description());
-        }
-    }
-    for(int i = 0 ; i < count_item; i ++) {
-        if(availableCameras.at(i).description() != m_ui->comboBox_CameraDevice->itemText(i)) {
-            m_ui->comboBox_CameraDevice->removeItem(i);
-            m_ui->comboBox_CameraDevice->addItem(availableCameras.at(i).description());
-        }
-    }
+    connect(m_ui->doubleSpinBox_alpha, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+    connect(m_ui->doubleSpinBox_beta, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+    connect(m_ui->doubleSpinBox_gamma, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+    connect(m_ui->doubleSpinBox_BinaryThresh, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+
+    connect(m_ui->checkBox_EnableHSV, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
+    connect(m_ui->checkBox_EnableSUFT, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
+
+    double _alpha, _beta, _gamma;
+    double _threshbinary;
+    ImageProcess::getParameterFromFile(_alpha, _beta, _gamma, _threshbinary);
+    m_ui->doubleSpinBox_alpha->setValue(_alpha);
+    m_ui->doubleSpinBox_beta->setValue(_beta);
+    m_ui->doubleSpinBox_gamma->setValue(_gamma);
+    m_ui->doubleSpinBox_BinaryThresh->setValue(_threshbinary);
+    pre_setSlider(m_ui->doubleSpinBox_alpha, m_ui->horizontalSlider_alpha);
+    pre_setSlider(m_ui->doubleSpinBox_beta, m_ui->horizontalSlider_beta);
+    pre_setSlider(m_ui->doubleSpinBox_gamma, m_ui->horizontalSlider_gamma);
+    pre_setSlider(m_ui->doubleSpinBox_BinaryThresh, m_ui->horizontalSlider_BasicBinaryThresh);
 }
 
 void MainWindow::camera_openCamera()
@@ -465,9 +469,111 @@ void MainWindow::camera_closeCamera()
     }
 }
 
+void MainWindow::camera_updateDevice()
+{
+    const QList<QCameraInfo> availableCameras = QCameraInfo::availableCameras();
+    int count_port = availableCameras.count();
+    int count_item = m_ui->comboBox_CameraDevice->count();
+
+    if(count_port < count_item) {
+        for(int i = count_port; i < count_item; i++) {
+            m_ui->comboBox_CameraDevice->removeItem(i);
+        }
+        count_item = count_port;
+    } else if(count_port > count_item) {
+        for(int i = count_item; i < count_port; i++) {
+            m_ui->comboBox_CameraDevice->addItem(availableCameras.at(i).description());
+        }
+    }
+    for(int i = 0 ; i < count_item; i ++) {
+        if(availableCameras.at(i).description() != m_ui->comboBox_CameraDevice->itemText(i)) {
+            m_ui->comboBox_CameraDevice->removeItem(i);
+            m_ui->comboBox_CameraDevice->addItem(availableCameras.at(i).description());
+        }
+    }
+}
+
+void MainWindow::cv_qtshow(Mat img, QImage::Format format)
+{
+    Mat temp;
+    cvtColor(img, temp, COLOR_BGR2RGB);
+    QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
+    m_ui->label_Camera_show->setFixedSize(qimage->size());
+    m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
+    temp.release();
+    img.release();
+    delete qimage;
+}
+
+// emit signal to show image from input.
+// can use dynamic flag to show image for loop.
+void MainWindow::cv_debugImage( Mat image)
+{
+    timer_imgproc->stop();
+    if(image.empty()) {
+        I_DEBUG("input image debug empty");
+        return;
+    } else {
+        image.assignTo(cv_image);
+    }
+    emit cv_signalShow(false);
+}
+
+bool MainWindow::cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para)
+{
+    if( m_serial->setCommand(cmd, 1000, para) == false) {
+        I_DEBUG("can't set command");
+        return false;
+    }
+    QEventLoop loop;
+    connect( m_serial, &RobotControll::commandWorkDone, &loop, &QEventLoop::quit );
+    connect( m_serial, &RobotControll::commandTimeOut, &loop, &QEventLoop::quit );
+    loop.exec();
+    if(m_serial->isTimeOut()) {
+        I_DEBUG("work haven't done yet");
+        return false;
+    }
+    I_DEBUG("command done");
+    return true;
+}
+
+void MainWindow::cv_getROI()
+{
+    QRect rect = m_ui->label_Camera_show->getRect();
+    cv_debugImage(m_camera.getMatFromQPixmap(m_ui->label_Camera_show->grab(rect)));
+}
+
+void MainWindow::cv_saveImageFromROI()
+{
+    if(cv_image.empty()) {
+        I_DEBUG("cv image is empty");
+        return;
+    }
+    imwrite(ImageProcess::getNode(ImageProcess::PathObjectImageSave), cv_image);
+    QMessageBox::information(this, tr("image"), tr("save ok"));
+    emit cv_signalShow(true);
+}
+
 void MainWindow::cv_timeout()
 {
     emit cv_signalShow(true);
+}
+
+void MainWindow::pre_setSlider(QDoubleSpinBox *spinbox, QSlider *slider)
+{
+    double value = spinbox->value();
+    int position = (int)((double)slider->minimum() + (value - spinbox->minimum())*
+                         (double)(slider->maximum()-slider->minimum())/(spinbox->maximum() - spinbox->minimum()));
+    slider->setSliderPosition(position);
+}
+
+void MainWindow::pre_setSpinBox(QSlider *slider, QDoubleSpinBox *spinbox)
+{
+    double value = (double)slider->value();
+    double spinbox_value = (double)(spinbox->minimum() + (value - (double)slider->minimum())*
+                                    (spinbox->maximum() - spinbox->minimum())/
+                                    ((double)slider->maximum() - (double)slider->minimum()));
+    spinbox->setValue(spinbox_value);
 }
 
 void MainWindow::cv_show(bool dynamic) {
@@ -475,7 +581,7 @@ void MainWindow::cv_show(bool dynamic) {
     if(dynamic) {
         timer_imgproc->start(DELAY_CAPTURE_20MS);
         Mat show_img;
-        m_camera.setImage(m_camera.getImageFromCamera());
+        m_camera.preProcess();
         m_camera.getImage(show_img);
         cv_qtshow(show_img, QImage::Format_RGB888);
     } else {
@@ -488,33 +594,55 @@ void MainWindow::cv_show(bool dynamic) {
     }
 }
 
-void MainWindow::cv_autoRun()
+void MainWindow::cv_calib()
 {
-    Mat img_object = imread(ImageProcess::getNode(ImageProcess::PathObjectImageSave));
-    Mat img_scene = m_camera.getImageFromCamera();
-    ImageProcess::undistortImage(img_scene, img_scene);
-    ImageProcess::gammaCorrectionContrast( img_scene, 0.4, img_scene);
+    m_ui->pushButton_Calib->setEnabled(false);
+    Size patternSize(8,6); //interior number of corners
+    vector<vector<Point3f>> listRealPoints;
+    vector<vector<Point2f>> listImagePoints;
 
-    vector<Point2f> matchObjectPoint;
-    vector<Point2f> matchScenePoint;
-    try{
-        ImageProcess::getMatchesFromObject(img_object, img_scene, matchObjectPoint, matchScenePoint);
+    // for loop and check to rotate image
+    Mat grayImage;
+    for(size_t i = 0; i < 10 ; i++ ) {
+        QMessageBox::information(this, tr("Calib"), tr("move pattern (%1/10 images)").arg(i+1));
+        grayImage = m_camera.getImageFromCamera(COLOR_BGR2GRAY);
+        if( ImageProcess::getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
+                                                 listImagePoints, listRealPoints) == false ) {
 
-        vector<vector<int>> groupPointIdx;
-        ImageProcess::hierarchicalClustering(matchScenePoint, 70.0, groupPointIdx);
-
-        for(size_t i = 0; i < groupPointIdx.size(); i++) {
-            for(size_t y = 0; y < groupPointIdx.at(i).size(); y++) {
-                circle(img_scene, matchScenePoint.at(groupPointIdx.at(i).at(y)),
-                       1, Scalar(i*10+100, i*20+100, i*70+10), 2);
-            }
+            m_ui->pushButton_Calib->setEnabled(true);
+            listImagePoints.clear();
+            listRealPoints.clear();
+            grayImage.release();
+            return;
         }
-        ImageProcess::drawRoiAroundObject(img_object, img_scene, matchObjectPoint, matchScenePoint, groupPointIdx);
-    } catch(const char* msg) {
     }
 
-    cv_debugImage(img_scene);
+    ImageProcess::calibCamera(listImagePoints, listRealPoints, grayImage.size());
 
+    vector<Point2f> imagePoints, realPoints;
+    if( ImageProcess::getPattern2CalibRobot(grayImage, (float)25.0, patternSize,
+                                            imagePoints, realPoints) == false ) {
+
+        m_ui->pushButton_Calib->setEnabled(true);
+        listImagePoints.clear();
+        listRealPoints.clear();
+        grayImage.release();
+        imagePoints.clear();
+        realPoints.clear();
+        return;
+    }
+    ImageProcess::calibRobot(imagePoints, realPoints);
+
+    listImagePoints.clear();
+    listRealPoints.clear();
+    grayImage.release();
+    imagePoints.clear();
+    realPoints.clear();
+    m_ui->pushButton_Calib->setEnabled(true);
+}
+
+void MainWindow::cv_autoRun()
+{
     //-- Localize the object
 
     //
@@ -587,121 +715,6 @@ void MainWindow::cv_autoRun()
     */
 }
 
-
-
-void MainWindow::cv_calib()
-{
-    m_ui->pushButton_Calib->setEnabled(false);
-    Size patternSize(8,6); //interior number of corners
-    vector<vector<Point3f>> listRealPoints;
-    vector<vector<Point2f>> listImagePoints;
-
-    // for loop and check to rotate image
-    Mat grayImage;
-    for(size_t i = 0; i < 10 ; i++ ) {
-        QMessageBox::information(this, tr("Calib"), tr("move pattern (%1/10 images)").arg(i+1));
-        grayImage = m_camera.getImageFromCamera(COLOR_BGR2GRAY);
-        if( ImageProcess::getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
-                                      listImagePoints, listRealPoints) == false ) {
-
-            m_ui->pushButton_Calib->setEnabled(true);
-            listImagePoints.clear();
-            listRealPoints.clear();
-            grayImage.release();
-            return;
-        }
-    }
-
-    ImageProcess::calibCamera(listImagePoints, listRealPoints, grayImage.size());
-
-    vector<Point2f> imagePoints, realPoints;
-    if( ImageProcess::getPattern2CalibRobot(grayImage, (float)25.0, patternSize,
-                                 imagePoints, realPoints) == false ) {
-
-        m_ui->pushButton_Calib->setEnabled(true);
-        listImagePoints.clear();
-        listRealPoints.clear();
-        grayImage.release();
-        imagePoints.clear();
-        realPoints.clear();
-        return;
-    }
-    ImageProcess::calibRobot(imagePoints, realPoints);
-
-    listImagePoints.clear();
-    listRealPoints.clear();
-    grayImage.release();
-    imagePoints.clear();
-    realPoints.clear();
-    m_ui->pushButton_Calib->setEnabled(true);
-}
-
-void MainWindow::cv_saveImageFromROI()
-{
-    if(cv_image.empty()) {
-        I_DEBUG("cv image is empty");
-        return;
-    }
-    imwrite(ImageProcess::getNode(ImageProcess::PathObjectImageSave), cv_image);
-    QMessageBox::information(this, tr("image"), tr("save ok"));
-    emit cv_signalShow(true);
-}
-
-// emit signal to show image from input.
-// can use dynamic flag to show image for loop.
-void MainWindow::cv_debugImage( Mat image)
-{
-    timer_imgproc->stop();
-    if(image.empty()) {
-        I_DEBUG("input image debug empty");
-        return;
-    } else {
-        image.assignTo(cv_image);
-    }
-    emit cv_signalShow(false);
-}
-
-void MainWindow::cv_qtshow(Mat img, QImage::Format format)
-{
-    Mat temp;
-    cvtColor(img, temp, COLOR_BGR2RGB);
-    QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
-    m_ui->label_Camera_show->setFixedSize(qimage->size());
-    m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
-    temp.release();
-    img.release();
-    delete qimage;
-}
-
-bool MainWindow::cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para)
-{
-    if( m_serial->setCommand(cmd, 1000, para) == false) {
-        I_DEBUG("can't set command");
-        return false;
-    }
-    QEventLoop loop;
-    connect( m_serial, &RobotControll::commandWorkDone, &loop, &QEventLoop::quit );
-    connect( m_serial, &RobotControll::commandTimeOut, &loop, &QEventLoop::quit );
-    loop.exec();
-    if(m_serial->isTimeOut()) {
-        I_DEBUG("work haven't done yet");
-        return false;
-    }
-    I_DEBUG("command done");
-    return true;
-}
-
-void MainWindow::cv_getROI()
-{
-    QRect rect = m_ui->label_Camera_show->getRect();
-    cv_debugImage(m_camera.getMatFromQPixmap(m_ui->label_Camera_show->grab(rect)));
-}
-
-void MainWindow::on_pushButton_ShowCamera_clicked()
-{
-    emit cv_signalShow(true);
-}
-
 void MainWindow::on_pushButton_Camera_Connect_clicked()
 {
     if( m_ui->pushButton_Camera_Connect->text() == "Connect") {
@@ -709,4 +722,69 @@ void MainWindow::on_pushButton_Camera_Connect_clicked()
     } else {
         camera_closeCamera();
     }
+}
+
+void MainWindow::on_pushButton_ShowCamera_clicked()
+{
+    emit cv_signalShow(true);
+}
+
+void MainWindow::dip_sliderChanged(int value)
+{
+    Q_UNUSED(value);
+    QSlider *slider = (QSlider*)sender();
+    if(slider == m_ui->horizontalSlider_alpha) {
+        pre_setSpinBox(m_ui->horizontalSlider_alpha, m_ui->doubleSpinBox_alpha);
+
+    } else if(slider == m_ui->horizontalSlider_beta) {
+        pre_setSpinBox(m_ui->horizontalSlider_beta, m_ui->doubleSpinBox_beta);
+
+    } else if(slider == m_ui->horizontalSlider_gamma) {
+        pre_setSpinBox(m_ui->horizontalSlider_gamma, m_ui->doubleSpinBox_gamma);
+
+    } else if(slider == m_ui->horizontalSlider_BasicBinaryThresh) {
+        pre_setSpinBox(m_ui->horizontalSlider_BasicBinaryThresh, m_ui->doubleSpinBox_BinaryThresh);
+    }
+    m_camera.setPreProcessParameter(m_ui->doubleSpinBox_gamma->value(), m_ui->doubleSpinBox_alpha->value(),
+                                    m_ui->doubleSpinBox_beta->value(), m_ui->doubleSpinBox_BinaryThresh->value());
+}
+
+void MainWindow::dip_spinBoxEditingFinished()
+{
+    QDoubleSpinBox *spinbox = (QDoubleSpinBox*)sender();
+    if(spinbox == m_ui->doubleSpinBox_alpha) {
+        pre_setSlider(m_ui->doubleSpinBox_alpha, m_ui->horizontalSlider_alpha);
+
+    } else if(spinbox == m_ui->doubleSpinBox_beta) {
+        pre_setSlider(m_ui->doubleSpinBox_beta, m_ui->horizontalSlider_beta);
+
+    } else if(spinbox == m_ui->doubleSpinBox_gamma) {
+        pre_setSlider(m_ui->doubleSpinBox_gamma, m_ui->horizontalSlider_gamma);
+
+    } else if(spinbox == m_ui->doubleSpinBox_BinaryThresh) {
+        pre_setSlider(m_ui->doubleSpinBox_BinaryThresh, m_ui->horizontalSlider_BasicBinaryThresh);
+    }
+}
+
+void MainWindow::dip_checkBoxEnableClicked(bool checked)
+{
+    QCheckBox *checkbox = (QCheckBox*)sender();
+    if(checked) {
+        m_ui->groupBox_Basic->setEnabled(false);
+        m_ui->groupBox_SUFT->setEnabled(false);
+
+        if(checkbox == m_ui->checkBox_EnableHSV) {
+            m_ui->groupBox_Basic->setEnabled(true);
+            m_camera.setMode(m_camera.ModeBasicProcessing);
+
+        } else if(checkbox == m_ui->checkBox_EnableSUFT) {
+            m_ui->groupBox_SUFT->setEnabled(true);
+            m_camera.setMode(m_camera.ModeSUFT);
+        }
+    } else {
+        m_ui->groupBox_Basic->setEnabled(true);
+        m_ui->groupBox_SUFT->setEnabled(true);
+        m_camera.setMode(m_camera.ModeNull);
+    }
+
 }

@@ -6,9 +6,14 @@ const char* ImageProcess::NODEPATH[ImageProcess::NumOfMat] = {
     "CordinatesRotateMatrix",
     "CordinatesTranferMatrix",
     "CordinatesScaleMatrix",
+    "AlphaParameter",
+    "BetaParameter",
+    "GammaParameter",
+    "ThreshBinaryParameter",
     "cameraMatrix.yml",
     "robotMatrix.yml",
-    "./images/object.jpg"
+    "./images/object.jpg",
+    "dipParameter.yml",
 };
 
 ImageProcess::ImageProcess()
@@ -26,6 +31,24 @@ void ImageProcess::deBug(string file, int line, string function, auto message)
     ostringstream oss;
     oss << file << "(" << line << ")" << "/" << function << ":" << message << endl;
     qDebug().noquote() << oss.str().c_str();
+}
+
+void ImageProcess::basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res)
+{
+    img.convertTo(res, -1, alpha_, beta_);
+}
+
+void ImageProcess::avgVectorPoints(vector<Point2f> vecPoint, Point2f &means)
+{
+    if(vecPoint.empty()) {
+        I_DEBUG("input error");
+        return;
+    }
+    Point2f temp(0, 0);
+    for(size_t i = 0; i < vecPoint.size(); i ++) {
+        temp += vecPoint.at(i);
+    }
+    means = Point2f(means.x / (double)vecPoint.size(), means.y / (double)vecPoint.size());
 }
 
 //-- Function return point is devided into group.
@@ -116,19 +139,6 @@ void ImageProcess::getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &
     //    img_matches.release();
 }
 
-void ImageProcess::avgVectorPoints(vector<Point2f> vecPoint, Point2f &means)
-{
-    if(vecPoint.empty()) {
-        I_DEBUG("input error");
-        return;
-    }
-    Point2f temp(0, 0);
-    for(size_t i = 0; i < vecPoint.size(); i ++) {
-        temp += vecPoint.at(i);
-    }
-    means = Point2f(means.x / (double)vecPoint.size(), means.y / (double)vecPoint.size());
-}
-
 void ImageProcess::drawRoiAroundObject(Mat imgObject, Mat imgScene,
                                         vector<Point2f> PointObject,
                                         vector<Point2f> PointScene,
@@ -156,11 +166,6 @@ void ImageProcess::drawRoiAroundObject(Mat imgObject, Mat imgScene,
         object.clear();
         scene.clear();
     }
-}
-
-void ImageProcess::basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res)
-{
-    img.convertTo(res, -1, alpha_, beta_);
 }
 
 void ImageProcess::gammaCorrectionContrast(Mat img, double gamma_, Mat &res)
@@ -379,6 +384,27 @@ void ImageProcess::getMatFromFile(nodePath_t node, nodePath_t filepath,
     file.release();
 }
 
+void ImageProcess::getParameterFromFile(double &_alpha, double &_beta, double &_gamma, double &_threshbinary)
+{
+    FileStorage file(getNode(PathDIPParameter), FileStorage::READ );
+    file[getNode(AlphaDouble)] >> _alpha;
+    file[getNode(BetaDouble)] >> _beta;
+    file[getNode(GammaDouble)] >> _gamma;
+    file[getNode(ThreshBinaryDouble)] >> _threshbinary;
+    file.release();
+}
+
+// save parameter with alpha, gamma, beta.
+void ImageProcess::setParameterIntoFile()
+{
+    FileStorage file(getNode(PathDIPParameter), FileStorage::WRITE );
+    file << getNode(AlphaDouble) << alpha;
+    file << getNode(BetaDouble) << beta;
+    file << getNode(GammaDouble) << gamma;
+    file << getNode(ThreshBinaryDouble) << threshbinary;
+    file.release();
+}
+
 void ImageProcess::setImage(Mat image)
 {
     if(!image.empty()) {
@@ -393,6 +419,15 @@ void ImageProcess::setHSVRange(Scalar _hsv_high, Scalar _hsv_low)
 {
     hsv_high = _hsv_high;
     hsv_low = _hsv_low;
+}
+
+void ImageProcess::setPreProcessParameter(double _gamma, double _alpha, double _beta, double _threshbinary)
+{
+    gamma = _gamma;
+    alpha = _alpha;
+    beta = _beta;
+    threshbinary = _threshbinary;
+    setParameterIntoFile();
 }
 
 void ImageProcess::getImage(Mat &image)
@@ -424,8 +459,51 @@ Mat ImageProcess::getImageFromCamera( ColorConversionCodes flag) {
     }
 }
 
+void ImageProcess::setMode(ImageProcess::processMode_t _mode)
+{
+    mode = _mode;
+}
+
 void ImageProcess::preProcess()
 {
-    img = getImageFromCamera(COLOR_BGR2HSV);
-    inRange(img, hsv_low, hsv_high, img);
+    Mat raw_img = getImageFromCamera();
+    Mat gamma_img, linear_img;
+    gammaCorrectionContrast(raw_img, gamma, gamma_img);
+    basicLinearTransformContrast(gamma_img, alpha, (int)beta, linear_img);
+
+    if(mode == ModeBasicProcessing) {
+        Mat gray_img, thresh_img;
+        cvtColor(linear_img, gray_img, COLOR_BGR2GRAY);
+        threshold(gray_img, thresh_img, threshbinary, 255, THRESH_BINARY);
+        setImage(thresh_img);
+    } else if(mode == ModeSUFT) {
+        // suft matching
+        Mat img_object = imread(getNode(PathObjectImageSave));
+        Mat img_scene = linear_img.clone();
+        //    ImageProcess::undistortImage(img_scene, img_scene);
+
+        vector<Point2f> matchObjectPoint;
+        vector<Point2f> matchScenePoint;
+        try{
+            getMatchesFromObject(img_object, img_scene, matchObjectPoint, matchScenePoint);
+
+            vector<vector<int>> groupPointIdx;
+            hierarchicalClustering(matchScenePoint, 70.0, groupPointIdx);
+
+            for(size_t i = 0; i < groupPointIdx.size(); i++) {
+                for(size_t y = 0; y < groupPointIdx.at(i).size(); y++) {
+                    circle(img_scene, matchScenePoint.at(groupPointIdx.at(i).at(y)),
+                           1, Scalar(i*10+100, i*20+100, i*70+10), 2);
+                }
+            }
+            drawRoiAroundObject(img_object, img_scene, matchObjectPoint, matchScenePoint, groupPointIdx);
+        } catch(const char* msg) {
+        }
+        setImage(img_scene);
+
+    } else {
+        setImage(linear_img);
+    }
+
+//    inRange(img, hsv_low, hsv_high, img);
 }

@@ -1,0 +1,6 @@
+%YAML:1.0
+---
+AlphaParameter: 3.
+BetaParameter: 0.
+GammaParameter: 1.
+ThreshBinaryParameter: 252.

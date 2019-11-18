@@ -4,11 +4,11 @@
 #include <QMainWindow>
 #include <QDebug>
 #include <QMessageBox>
-
 #include <QSerialPortInfo>
 #include <QCameraInfo>
-
 #include <QTimer>
+#include <QSlider>
+#include <QSpinBox>
 
 #include <qlabel_custom.h>
 #include <robotcontroll.h>
@@ -33,42 +33,36 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
-    // pushButton slot
-private slots:
-
-    void on_pushButton_Serial_Default_clicked();
-
-    void on_pushButton_Serial_Connect_clicked();
-
-    void on_pushButton_Camera_Connect_clicked();
-
-    void on_pushButton_ShowCamera_clicked();
-
-private slots:
-    void serial_updatePortName();                                   // connect timeout timer
-    void serial_updateSetting();                                    // connect current text change
-    void serial_handleError(QSerialPort::SerialPortError error);    // connect error handle
-    void manual_checkBox_event(bool checked);                       // connect checkbox clicked
-    void manual_checkPara_setCommand(void);                         // connect request button
-
-    void logs_clear();                                              // connect clear log button
-    void camera_updateDevice();                                     // connect timeout timer
-
 private:
     void serial_init();
     void serial_setDefault();
     void serial_openPort();
     void serial_closePort();
+    void logs_write(QString message, QColor c);
 
+private slots:
+    // slot in serial tag
+    void manual_checkBox_event(bool checked);                       // connect checkbox clicked
+    void manual_checkPara_setCommand(void);                         // connect request button
+    void serial_updatePortName();                                   // connect timeout timer
+    void serial_updateSetting();                                    // connect current text change
+    void serial_handleError(QSerialPort::SerialPortError error);    // connect error handle
+    void logs_clear();                                              // connect clear log button
+
+    // pushbutton slot
+    void on_pushButton_Serial_Default_clicked();
+    void on_pushButton_Serial_Connect_clicked();
+
+private:
     void camera_init();
     void camera_openCamera();
     void camera_closeCamera();
 
-//support
-    void logs_write(QString message, QColor c);
+private slots:
+    void camera_updateDevice();             // connect timeout timer
 
-//opencv processing
+private:
+    //crossover other class function
     void cv_qtshow(Mat img, QImage::Format format);
     void cv_debugImage(Mat image);
     bool cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para);
@@ -77,18 +71,33 @@ signals:
     void cv_signalShow(bool dynamic = true);
 
 private slots:
+    // mouse select roi
     void cv_getROI();                       // grab roi mouse released
     void cv_saveImageFromROI();             // Button Save Image
+    // timer processing image
     void cv_timeout();                      // Timer 20ms get frame
+    // slot with scrollbar
+    void pre_setSlider(QDoubleSpinBox *spinbox, QSlider *slider);
+    void pre_setSpinBox(QSlider *slider, QDoubleSpinBox *spinbox);
+
+    // push button
     void cv_show(bool dynamic = false);
     void cv_calib();                        // Button calib
     void cv_autoRun();                      // Button AutoRun
 
+    // pushbutton slot
+    void on_pushButton_Camera_Connect_clicked();
+    void on_pushButton_ShowCamera_clicked();
+
+    // slider and spinbox and checkbox slot
+    void dip_sliderChanged(int value);
+    void dip_spinBoxEditingFinished();
+    void dip_checkBoxEnableClicked(bool checked);
 
 private:
     Ui::MainWindow *m_ui = nullptr;
     RobotControll *m_serial = nullptr;
-    QThread *thread_serial;
+    //    QThread *thread_serial;
     QLabel *m_status = nullptr;
 
     QTimer *timer_camera_comboBox = nullptr;
