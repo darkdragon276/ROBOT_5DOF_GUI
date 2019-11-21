@@ -73,6 +73,8 @@ void MainWindow::serial_init() {
     connect(m_ui->checkBox_SetWidth, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
     connect(m_ui->checkBox_SetHome, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
     connect(m_ui->checkBox_SetDuty, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_SetPosNAng, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    connect(m_ui->checkBox_SetTime, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
     connect(m_ui->checkBox_Save, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
 
     m_ui->label_Para1->hide();
@@ -130,7 +132,7 @@ void MainWindow::serial_closePort() {
 
 void MainWindow::logs_write(QString message, QColor c) {
     if( message.isEmpty() || message.isNull() ) {
-        I_DEBUG("log write error");
+        M_DEBUG("log write error");
         return;
     }
     m_ui->textEdit_logs->setTextColor(c);
@@ -210,7 +212,7 @@ void MainWindow::manual_checkBox_event(bool checked) {
             m_ui->label_ManualExamplePara->setText("X, Y, Z: \"10.2\" ; Angle: 0->90");
         } else if(checkbox == m_ui->checkBox_SetTime) {
 
-            m_ui->checkBox_SetDuty->setEnabled(true);
+            m_ui->checkBox_SetTime->setEnabled(true);
             m_ui->label_Para1->setText("Time(ms)");
 
             m_ui->label_Para1->show();
@@ -220,7 +222,6 @@ void MainWindow::manual_checkBox_event(bool checked) {
         } else if(checkbox == m_ui->checkBox_Save) {
 
             m_ui->checkBox_Save->setEnabled(true);
-
         }
     } else {
         m_ui->checkBox_SetPos->setEnabled(true);
@@ -372,7 +373,6 @@ void MainWindow::serial_updateSetting() {
     //    qDebug() << m_serial->portName() << m_serial->baudRate();
 }
 
-
 void MainWindow::serial_handleError(QSerialPort::SerialPortError error)
 {
     if (error == QSerialPort::ResourceError) {
@@ -398,7 +398,6 @@ void MainWindow::on_pushButton_Serial_Connect_clicked()
     } else {
         serial_closePort();
     }
-
 }
 
 // camera function
@@ -511,30 +510,12 @@ void MainWindow::cv_debugImage( Mat image)
 {
     timer_imgproc->stop();
     if(image.empty()) {
-        I_DEBUG("input image debug empty");
+        M_DEBUG("input image debug empty");
         return;
     } else {
         image.assignTo(cv_image);
     }
     emit cv_signalShow(false);
-}
-
-bool MainWindow::cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para)
-{
-    if( m_serial->setCommand(cmd, 1000, para) == false) {
-        I_DEBUG("can't set command");
-        return false;
-    }
-    QEventLoop loop;
-    connect( m_serial, &RobotControll::commandWorkDone, &loop, &QEventLoop::quit );
-    connect( m_serial, &RobotControll::commandTimeOut, &loop, &QEventLoop::quit );
-    loop.exec();
-    if(m_serial->isTimeOut()) {
-        I_DEBUG("work haven't done yet");
-        return false;
-    }
-    I_DEBUG("command done");
-    return true;
 }
 
 void MainWindow::cv_getROI()
@@ -546,7 +527,7 @@ void MainWindow::cv_getROI()
 void MainWindow::cv_saveImageFromROI()
 {
     if(cv_image.empty()) {
-        I_DEBUG("cv image is empty");
+        M_DEBUG("cv image is empty");
         return;
     }
     imwrite(ImageProcess::getNode(ImageProcess::PathObjectImageSave), cv_image);
@@ -587,7 +568,7 @@ void MainWindow::cv_show(bool dynamic) {
     } else {
         timer_imgproc->stop();
         if(cv_image.empty()) {
-            I_DEBUG("cv_image is empty");
+            M_DEBUG("cv_image is empty");
             return;
         }
         cv_qtshow(cv_image, QImage::Format_RGB888);
@@ -603,10 +584,10 @@ void MainWindow::cv_calib()
 
     // for loop and check to rotate image
     Mat grayImage;
-    for(size_t i = 0; i < 10 ; i++ ) {
+    for(size_t i = 0; i < 1 ; i++ ) {
         QMessageBox::information(this, tr("Calib"), tr("move pattern (%1/10 images)").arg(i+1));
         grayImage = m_camera.getImageFromCamera(COLOR_BGR2GRAY);
-        if( ImageProcess::getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
+        if( m_camera.getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
                                                  listImagePoints, listRealPoints) == false ) {
 
             m_ui->pushButton_Calib->setEnabled(true);
@@ -617,12 +598,11 @@ void MainWindow::cv_calib()
         }
     }
 
-    ImageProcess::calibCamera(listImagePoints, listRealPoints, grayImage.size());
+    m_camera.calibCamera(listImagePoints, listRealPoints, grayImage.size());
 
     vector<Point2f> imagePoints, realPoints;
-    if( ImageProcess::getPattern2CalibRobot(grayImage, (float)25.0, patternSize,
+    if( m_camera.getPattern2CalibRobot(grayImage, (float)25.0, patternSize,
                                             imagePoints, realPoints) == false ) {
-
         m_ui->pushButton_Calib->setEnabled(true);
         listImagePoints.clear();
         listRealPoints.clear();
@@ -631,7 +611,7 @@ void MainWindow::cv_calib()
         realPoints.clear();
         return;
     }
-    ImageProcess::calibRobot(imagePoints, realPoints);
+    m_camera.calibRobot(imagePoints, realPoints);
 
     listImagePoints.clear();
     listRealPoints.clear();
@@ -643,76 +623,36 @@ void MainWindow::cv_calib()
 
 void MainWindow::cv_autoRun()
 {
-    //-- Localize the object
+    Point2f center_img = m_camera.getCenter();
+    Point2f center_real;
 
-    //
-    //    Mat H = findHomography( obj, scene, RANSAC );
-    //    //-- Get the corners from the image_1 ( the object to be "detected" )
-    //
-    //    vector<Point2f> scene_corners(4);
-    //    if(!H.empty()) {
-    //        perspectiveTransform( obj_corners, scene_corners, H);
-    //        //-- Draw lines between the corners (the mapped object in the scene - image_2 )
-    //        line( img_matches, scene_corners[0] + Point2f((float)img_object.cols, 0),
-    //                scene_corners[1] + Point2f((float)img_object.cols, 0), Scalar(0, 255, 0), 4 );
-    //        line( img_matches, scene_corners[1] + Point2f((float)img_object.cols, 0),
-    //                scene_corners[2] + Point2f((float)img_object.cols, 0), Scalar( 0, 255, 0), 4 );
-    //        line( img_matches, scene_corners[2] + Point2f((float)img_object.cols, 0),
-    //                scene_corners[3] + Point2f((float)img_object.cols, 0), Scalar( 0, 255, 0), 4 );
-    //        line( img_matches, scene_corners[3] + Point2f((float)img_object.cols, 0),
-    //                scene_corners[0] + Point2f((float)img_object.cols, 0), Scalar( 0, 255, 0), 4 );
-    //        cv_debugImage(img_matches, false);
-    //        I_DEBUG("H is available");
-    //    }
-
-    /*
-    if( cv_sendRequest(SetHome) == false ) {
+    center_img = m_camera.getCenter();
+    if(center_img.x == 0 && center_img.y == 0) {
         return;
     }
-    Mat undistImg;
-    if(cv_undistortImage(grayImg, undistImg) == false) {
-        I_DEBUG("error undistort image");
-        grayImg.release();
-        return;
-    }
+    ImageProcess::convertToRealPoint(center_img, center_real);
+    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
+    m_serial->setWidthNPosition(center_real, 2000, 3);
+
+    //x = 62.5 , y = 125
 
     // change to detect image point of object
-    vector<Point2f> imagePoints, realPoints;
-    if( cv_getPattern2CalibRobot(grayImg, (float)25.0, Size(8, 6),
-                                 imagePoints, realPoints) == false ) {
-        return;
-    }
+    //    vector<Point2f> imagePoints, realPoints;
+    //    if( ImageProcess::getPattern2CalibRobot(grayImg, (float)25.0, Size(8, 6),
+    //                                 imagePoints, realPoints) == false ) {
+    //        return;
+    //    }
 
-    I_DEBUG("testting");
-    for(size_t idx = 0; idx < realPoints.size() ; idx++) {
-        Mat real = (Mat_<double>(2, 1) << realPoints.at(idx).x, realPoints.at(idx).y);
-        Mat img = (Mat_<double>(2, 1) << imagePoints.at(idx).x, imagePoints.at(idx).y);
-        I_DEBUG(img);
-        I_DEBUG(real);
+    //    M_DEBUG("testting");
+    //    Mat real = (Mat_<double>(2, 1) << realPoints.at(idx).x, realPoints.at(idx).y);
+    //    Mat img = (Mat_<double>(2, 1) << imagePoints.at(idx).x, imagePoints.at(idx).y);
+    //    M_DEBUG(img);
+    //    M_DEBUG(real);
 
-        // get real point
-        Point2f res;
-        cv_convertToRealPoint(imagePoints.at(idx), res);
-        I_DEBUG(res);
-
-        if( cv_sendRequest(SetWidth, tr("2.0")) == false) {
-            return;
-        }
-        if( cv_sendRequest(SetPosition, tr("%1 %2 0").arg(-res.x/10).arg(res.y/10)) == false) {
-            return;
-        }
-
-        if( cv_sendRequest(SetHome) == false) {
-            return;
-        }
-        I_DEBUG("request done");
-        for(int i = 0 ; i < 1000000; i++) {
-
-        }
-    }
-    grayImg.release();
-    undistImg.release();
-    */
+    //    // get real point
+    //    Point2f res;
+    //    cv_convertToRealPoint(imagePoints.at(idx), res);
+    //    qDebug() << tr("x:%1, y:%2").arg(realPoints.x).arg(realPoints.y);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()

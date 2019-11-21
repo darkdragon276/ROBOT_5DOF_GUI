@@ -5,12 +5,13 @@
 #include <QSerialPort>
 #include <QDebug>
 #include <QTimer>
+#include <QEventLoop>
 
 #include <stdio.h>
 #include <string.h>
 #include <sstream>
 
-#define NDEBUG(message)  RobotControll::deBug(__FILE__, __LINE__, __FUNCTION__, message)
+#include "imageprocess.h"
 
 using namespace std;
 
@@ -21,8 +22,6 @@ class RobotControll : public QSerialPort
 public:
     explicit RobotControll(QObject *parent = nullptr);
     virtual ~RobotControll();
-
-    void deBug(string file, int line, string function, string message);
     string qbyteArray2string(QByteArray &data);
 public:
     enum robotCommand_t {
@@ -32,6 +31,8 @@ public:
         SetDuty,
         SetPositionWithArg,
         SetTime,
+        SetWidPos,
+        SetPositionArgWid,
         Save,
         NumOfCmd,
     };
@@ -42,6 +43,8 @@ public:
         "SETDUTY",
         "SETPOSNARG",
         "SETTIME",
+        "SETWIDPOS",
+        "SETPOSANGWID",
         "SAVE"
     };
     enum robotStatus_t {
@@ -64,11 +67,6 @@ public:
         "ERROR",
     };
 
-public:
-    bool setCommand(robotCommand_t cmd, int time, const QString para = "");
-    robotStatus_t getStatus();
-    void resetId();
-    bool isTimeOut();
 signals:
     void commandTimeOut();
     void commandWorkDone();
@@ -80,6 +78,14 @@ private:
     void readData();
     void timeOut();
     void setStatus(QString response);
+    bool setCommandNWait(robotCommand_t cmd, const QString para = "");
+
+public:
+    bool setCommand(robotCommand_t cmd, int time, const QString para = "");
+    robotStatus_t getStatus();
+    void resetId();
+    bool isTimeOut();
+    void setWidthNPosition(Point2f pos, int time, double Width);
 
 private:
     int id_command = 1;

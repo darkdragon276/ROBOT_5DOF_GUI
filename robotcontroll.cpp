@@ -15,7 +15,7 @@ RobotControll::~RobotControll()
 bool RobotControll::packData(QByteArray &data)
 {
     if(data.isNull() || data.isEmpty()) {
-        NDEBUG("data input is empty");
+        M_DEBUG("data input is empty");
         return false;
     }
     // packing
@@ -45,11 +45,11 @@ bool RobotControll::packData(QByteArray &data)
 bool RobotControll::unPackData(QByteArray &data)
 {
     if(data.isNull() || data.isEmpty()) {
-        NDEBUG("data input is null");
+        M_DEBUG("data input is null");
         return false;
     }
     if(data.at(0) != 0x7E || data.at(data.length()-1) != 0x7F) {
-        NDEBUG("begin and end charater isn't 0x7E and 0x7F");
+        M_DEBUG("begin and end charater isn't 0x7E and 0x7F");
         return false;
     }
     QByteArray temp;
@@ -76,13 +76,6 @@ bool RobotControll::unPackData(QByteArray &data)
     return true;
 }
 
-void RobotControll::deBug(string file, int line, string function, string message)
-{
-    ostringstream oss;
-    oss << file << "(" << line << ")" << "/" << function << ":" << message << endl;
-    qDebug().noquote() << oss.str().c_str();
-}
-
 string RobotControll::qbyteArray2string(QByteArray &data)
 {
     return QString::fromLocal8Bit(data).toStdString().c_str();
@@ -91,13 +84,13 @@ string RobotControll::qbyteArray2string(QByteArray &data)
 bool RobotControll::writeData(QByteArray &data) {
     if(this->isOpen()) {
         if( this->packData(data) == false ) {
-            NDEBUG("error pack");
+            M_DEBUG("error pack");
             return false;
         }
         this->write(data);
-        NDEBUG(qbyteArray2string(data));
+        M_DEBUG(qbyteArray2string(data));
     } else {
-        NDEBUG("no device");
+        M_DEBUG("no device");
         return false;
     }
     return true;
@@ -110,17 +103,17 @@ void RobotControll::readData() {
             QByteArray temp = data.mid(data.lastIndexOf(0x7E));
             data.remove(data.lastIndexOf(0x7E), data.length());
             if( this->unPackData(temp) == false ) {
-                NDEBUG("error unpack");
+                M_DEBUG("error unpack");
                 return;
             }
             setStatus(temp);
             if(robot_stt == RobotDone) {
                 emit commandWorkDone();
             }
-            //  NDEBUG(qbyteArray2string(temp));
+            //  M_DEBUG(qbyteArray2string(temp));
         }
     } else {
-        NDEBUG("no device");
+        M_DEBUG("no device");
         return;
     }
 }
@@ -143,7 +136,7 @@ bool RobotControll::setCommand(robotCommand_t cmd, int time, const QString para)
                        .arg(ROBOTCOMMAND[cmd]).arg(para));
     }
     if(this->writeData(command) == false) {
-        NDEBUG("write data fail");
+        M_DEBUG("write data fail");
         return false;
     }
     id_command++;
@@ -159,9 +152,28 @@ void RobotControll::setStatus(QString response) {
     for(int i = 0; i < NumOfStt - 1; i++) {
         if( stt == ROBOTSTATUS[i]) {
             robot_stt = static_cast<robotStatus_t>(i);
+            M_DEBUG(ROBOTSTATUS[robot_stt]);
             return;
         }
     }
+}
+
+bool RobotControll::setCommandNWait(robotCommand_t cmd, const QString para)
+{
+    if( this->setCommand(cmd, 3000, para) == false) {
+        M_DEBUG("can't set command");
+        return false;
+    }
+    QEventLoop loop;
+    connect( this, &RobotControll::commandWorkDone, &loop, &QEventLoop::quit );
+    connect( this, &RobotControll::commandTimeOut, &loop, &QEventLoop::quit );
+    loop.exec();
+    if(this->isTimeOut()) {
+        M_DEBUG("work haven't done yet");
+        return false;
+    }
+    M_DEBUG("command done");
+    return true;
 }
 
 RobotControll::robotStatus_t RobotControll::getStatus()
@@ -179,3 +191,14 @@ bool RobotControll::isTimeOut()
     return istimeout;
 }
 
+void RobotControll::setWidthNPosition(Point2f pos, int time, double Width)
+{
+    const QString para_poswidmax = tr("%1 %2 %3 1.0").arg(Width+1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
+    const QString para_poswidmin = tr("%1 %2 %3 1.0").arg(Width-1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
+    const QString para_time = tr("%1").arg(time);
+
+    setCommandNWait(SetTime, para_time);
+    setCommandNWait(SetWidPos, para_poswidmax);
+    setCommandNWait(SetWidPos, para_poswidmin);
+    setCommandNWait(SetHome);
+}

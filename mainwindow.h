@@ -65,7 +65,6 @@ private:
     //crossover other class function
     void cv_qtshow(Mat img, QImage::Format format);
     void cv_debugImage(Mat image);
-    bool cv_sendRequest(RobotControll::robotCommand_t cmd, const QString para);
 
 signals:
     void cv_signalShow(bool dynamic = true);
