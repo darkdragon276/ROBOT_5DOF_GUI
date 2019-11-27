@@ -64,4 +64,9 @@ void QLabel_custom::getBottomRightPoint(QPoint &brpoint)
     brpoint = bottomright_point;
 }
 
+QPoint QLabel_custom::getLastPoint()
+{
+    return last_point;
+}
+
 

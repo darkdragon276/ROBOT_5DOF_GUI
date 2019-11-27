@@ -20,23 +20,27 @@
 #include <QImage>
 #include <QtCore>
 #include <QPixmap>
+#include <QObject>
 
-#define M_DEBUG(message)  ImageProcess::deBug(__FILE__, __LINE__, __FUNCTION__, message)
-#define I_DEBUG(image)    ImageProcess::deBugImage(__FILE__, __LINE__, __FUNCTION__, image)
+#include "pointprocess.h"
+#include "debug.h"
 
-using namespace std;
+#define I_DEBUG(image)      ImageProcess::deBugImage(__FILE__, __LINE__, __FUNCTION__, image)
+#define DIP_CAMERA_FPS      (60.f)
+#define DIP_TIMER_FPS       (1000.f/DIP_CAMERA_FPS)
+#define DIP_MAIN_FPS        (1000.f/20.f)
+
 using namespace cv;
 using namespace cv::xfeatures2d;
 
-class ImageProcess:public VideoCapture
+class ImageProcess:public VideoCapture, public QObject
 {
 public:
-    explicit ImageProcess();
-    virtual ~ImageProcess();
-    static void deBug(string file, int line, string function, string message);
-    static void deBug(string file, int line, string function, const char* message);
-    static void deBug(string file, int line, string function, Mat message);
-    static void deBug(string file, int line, string function, auto message);
+    ImageProcess();
+    ~ImageProcess();
+    void init();
+    void denit();
+    void _grabImage();
     void deBugImage(Mat img);
     enum nodePath_t{
         CamMat = 0,
@@ -48,6 +52,8 @@ public:
         BetaDouble,
         GammaDouble,
         ThreshBinaryDouble,
+        HSVMaxScalar,
+        HSVMinScalar,
         PathIntrincyPara,
         PathCordinateConvertPara,
         PathObjectImageSave,
@@ -67,7 +73,8 @@ public: // static function don't need call object
     static const char* getNode(nodePath_t node);
     static void getMatFromFile(nodePath_t node, nodePath_t filepath,
                                 Mat &mat, bool debug = false);
-    static void getParameterFromFile(double &_alpha, double &_beta, double &_gamma, double &_threshbinary);
+    static void getParameterFromFile(double &_alpha, double &_beta, double &_gamma,
+                                     double &_threshbinary, Scalar &_hsv_max, Scalar &_hsv_min);
     static Mat getMatFromQPixmap(QPixmap pixmap);
     // to calib camera
     static bool undistortImage(Mat grayImage, Mat &undistortImage);
@@ -83,42 +90,38 @@ public: // static function don't need call object
     // to matching and draw object roi
     static void getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &keypoint_object,
                                      vector<Point2f> &keypoint_scene);
-
-    static void hierarchicalClustering(vector<Point2f> point_list, double max_distance,
-                                       vector<vector<int> > &pointInGroup_idx);
-
-    static void drawRoiAroundObject(Mat imgObject, Mat imgScene, vector<Point2f> PointObject,
-                                    vector<Point2f> PointScene, vector<vector<int> > groupPointIdx);
-    static bool convertToRealPoint(Point2f imagePoint, Point2f &realPoint);
+    static void homographyTranform(Mat imgObject, Mat imgScene, vector<Point2f> PointObject,
+                                   vector<Point2f> PointScene, vector<vector<int> > groupPointIdx, vector<Point2f> &_vec_center);
+    static bool toReal(Point2f imagePoint, Point2f &realPoint);
+    static bool toReal(double _img_pixel, double &_real_distance);
     // preprocessing image
-    static void gammaCorrectionContrast(Mat img, double gamma_, Mat &res);
-    static void basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res);
-    static void drawShapes(vector<vector<Point>> Shapes, Mat &image,
-                           Scalar_<double> &color, const String &nameshapes);
-    static Point2f avgVectorPoints(vector<Point2f> vecPoint);
-    static Point2f avgVectorPoints(vector<Point> vecPoint);
+    static void gammaCorrectionContrast(Mat _img, double gamma_, Mat &res);
+    static void basicLinearTransformContrast(Mat _img, double alpha_, int beta_, Mat &res);
 
 public: // non static function => must call object
     void getImage(Mat &image);
     void setImage(Mat image);
-    void setHSVRange(Scalar _hsv_high, Scalar _hsv_low);
     void setPreProcessParameter(double _gamma, double _alpha, double _beta,
-                                double _threshbinary);
+                                double _threshbinary, Scalar _hsv_high, Scalar _hsv_low);
     void setParameterIntoFile();
-    void setVectorPoint(Point2f _point);
-    Point2f getCenter();
     Mat getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
     void setMode(processMode_t _mode);
 
-    void preProcess();
+    void process();
+    void basicProcess(Mat &color_img);
+    void suftProcess(Mat &color_img);
+    void setCenter(Point2f _center);
+    Point2f getCenter();
 private:
-    Mat img;
-    Scalar hsv_high, hsv_low;
+
+    Mat img; Scalar hsv_high, hsv_low;
     double gamma = 1.0, alpha = 1.0, beta = 0.0;
     double threshbinary = 100;
     processMode_t mode = ModeNull;
-    vector<Point2f> data_point;
-    const int MAX_DATA_SIZE = 30;
+    QTimer *_timer_release_buffer;
+    PointProcess point_process;
+    static const int MAX_GROUP_NUM = 10;
+    Point2f center;
 };
 
 #endif // IMAGEPROCESS_H

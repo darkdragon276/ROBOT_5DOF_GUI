@@ -38,7 +38,8 @@ bool RobotControll::packData(QByteArray &data)
     temp.push_back((char)0x7F);
     data.clear();
     data.append(temp);
-    temp.clear();
+
+    Debug::_delete(temp);
     return true;
 }
 
@@ -72,7 +73,8 @@ bool RobotControll::unPackData(QByteArray &data)
     }
     data.clear();
     data.append(temp);
-    temp.clear();
+
+    Debug::_delete(temp);
     return true;
 }
 
@@ -104,6 +106,7 @@ void RobotControll::readData() {
             data.remove(data.lastIndexOf(0x7E), data.length());
             if( this->unPackData(temp) == false ) {
                 M_DEBUG("error unpack");
+                Debug::_delete(temp, data);
                 return;
             }
             setStatus(temp);
@@ -137,11 +140,14 @@ bool RobotControll::setCommand(robotCommand_t cmd, int time, const QString para)
     }
     if(this->writeData(command) == false) {
         M_DEBUG("write data fail");
+        Debug::_delete(command);
         return false;
     }
     id_command++;
     timeout->start(time);
     istimeout = false;
+
+    Debug::_delete(command);
     return true;
 }
 
@@ -156,6 +162,9 @@ void RobotControll::setStatus(QString response) {
             return;
         }
     }
+    stt.clear();
+    stt.resize(0);
+    listRes.clear();
 }
 
 bool RobotControll::setCommandNWait(robotCommand_t cmd, const QString para)
@@ -196,9 +205,14 @@ void RobotControll::setWidthNPosition(Point2f pos, int time, double Width)
     const QString para_poswidmax = tr("%1 %2 %3 1.0").arg(Width+1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
     const QString para_poswidmin = tr("%1 %2 %3 1.0").arg(Width-1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
     const QString para_time = tr("%1").arg(time);
+    const QString para_posbase = tr("%1 %2 1.0").arg(20.0).arg(20.0);
+    const QString para_widbase = tr("%1").arg(Width+1);
 
     setCommandNWait(SetTime, para_time);
     setCommandNWait(SetWidPos, para_poswidmax);
     setCommandNWait(SetWidPos, para_poswidmin);
+    setCommandNWait(SetHome);
+    setCommandNWait(SetPosition, para_posbase);
+    setCommandNWait(SetWidth, para_widbase);
     setCommandNWait(SetHome);
 }

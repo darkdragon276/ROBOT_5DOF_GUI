@@ -20,6 +20,7 @@ public:
     QRect getRect();
     void getTopLeftPoint(QPoint &tlpoint);
     void getBottomRightPoint(QPoint &brpoint);
+    QPoint getLastPoint();
     int x, y;
     QPoint first_point, last_point;
     QPoint topleft_point, bottomright_point;

@@ -10,18 +10,17 @@
 #include <QSlider>
 #include <QSpinBox>
 
-#include <qlabel_custom.h>
-#include <robotcontroll.h>
-#include <imageprocess.h>
+#include "qlabel_custom.h"
+#include "robotcontroll.h"
+#include "imageprocess.h"
+#include "debug.h"
 
 #define PI 3.14159265
+#define MAIN_TIMER_REFRESH  (1000/1)
 
 Q_DECLARE_METATYPE(QCameraInfo)
 
 using namespace std;
-
-#define DELAY_CAPTURE_20MS  20
-
 namespace Ui {
 class MainWindow;
 }
@@ -72,7 +71,8 @@ signals:
 private slots:
     // mouse select roi
     void cv_getROI();                       // grab roi mouse released
-    void cv_saveImageFromROI();             // Button Save Image
+    void cv_saveObjectFromROI();            // Button Save Image
+    void cv_saveHSVBaseFromROI();           // Button Save HSV Range
     // timer processing image
     void cv_timeout();                      // Timer 20ms get frame
     // slot with scrollbar

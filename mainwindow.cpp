@@ -1,5 +1,39 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#define COMBOBOX_NUM    (6)
+#define CHECKBOX_NUM    (7)
+#define PARA_NUM        (4)
+#define CAMERA_PARA_NUM (10)
+const char* comboBox_Name[COMBOBOX_NUM] = {"comboBox_Comport",
+                                           "comboBox_Baudrate",
+                                           "comboBox_Databits",
+                                           "comboBox_Parity",
+                                           "comboBox_Stopbits",
+                                           "comboBox_Flowcontrol"};
+
+const char* checkBox_Name[CHECKBOX_NUM] = {"checkBox_SetPos",
+                                           "checkBox_SetWidth",
+                                           "checkBox_SetHome",
+                                           "checkBox_SetDuty",
+                                           "checkBox_SetPosNAng",
+                                           "checkBox_SetTime",
+                                           "checkBox_Save"};
+
+const char* para_Name[PARA_NUM] = {"Para1",
+                                   "Para2",
+                                   "Para3",
+                                   "Para4"};
+
+const char* cameraPara_Name[CAMERA_PARA_NUM] = {"alpha",
+                                                "beta",
+                                                "gamma",
+                                                "BinaryThresh",
+                                                "Hmax",
+                                                "Hmin",
+                                                "Smax",
+                                                "Smin",
+                                                "Vmax",
+                                                "Vmin"};
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
     m_ui(new Ui::MainWindow),
@@ -8,12 +42,8 @@ MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
 {
     m_ui->setupUi(this);
     m_ui->statusBar->addWidget(m_status);
-
-    //    thread_serial = new QThread(this);
-    //    thread_serial->start();
     serial_init();
     camera_init();
-
 }
 
 MainWindow::~MainWindow()
@@ -57,59 +87,50 @@ void MainWindow::serial_init() {
     serial_setDefault();
     serial_updateSetting();
     m_status->setText(tr("No Robot Device"));
-
-    connect(m_ui->comboBox_Comport, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
-    connect(m_ui->comboBox_Baudrate, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
-    connect(m_ui->comboBox_Databits, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
-    connect(m_ui->comboBox_Parity, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
-    connect(m_ui->comboBox_Stopbits, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
-    connect(m_ui->comboBox_Flowcontrol, &QComboBox::currentTextChanged, this, &MainWindow::serial_updateSetting );
+    for(int i = 0; i < COMBOBOX_NUM; i++) {
+        connect(this->findChild<QComboBox*>(comboBox_Name[i]), &QComboBox::currentTextChanged,
+                this, &MainWindow::serial_updateSetting, Qt::QueuedConnection);
+    }
 
     connect(m_serial, &QSerialPort::errorOccurred, this, &MainWindow::serial_handleError);
     connect(m_ui->pushButton_LogsClear, &QPushButton::clicked, this, &MainWindow::logs_clear);
     connect(m_ui->pushButton_Request, &QPushButton::clicked, this, &MainWindow::manual_checkPara_setCommand);
 
-    connect(m_ui->checkBox_SetPos, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_SetWidth, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_SetHome, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_SetDuty, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_SetPosNAng, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_SetTime, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
-    connect(m_ui->checkBox_Save, QOverload<bool>::of(&QCheckBox::clicked), this,  &MainWindow::manual_checkBox_event);
+    for(int i = 0; i < CHECKBOX_NUM; i++) {
+        connect(this->findChild<QCheckBox*>(checkBox_Name[i]),QOverload<bool>::of(&QCheckBox::clicked),
+                this,  &MainWindow::manual_checkBox_event);
+    }
+    for(int i = 0; i < PARA_NUM; i ++) {
+        this->findChild<QLabel*>(tr("label_%1").arg(para_Name[i]))->hide();
+        this->findChild<QTextEdit*>(tr("textEdit_%1").arg(para_Name[i]))->hide();
+    }
 
-    m_ui->label_Para1->hide();
-    m_ui->textEdit_Para1->hide();
-    m_ui->label_Para2->hide();
-    m_ui->textEdit_Para2->hide();
-    m_ui->label_Para3->hide();
-    m_ui->textEdit_Para3->hide();
-    m_ui->label_Para4->hide();
-    m_ui->textEdit_Para4->hide();
     m_ui->label_ManualExamplePara->setText("");
-
     timer_serial_comboBox = new QTimer(this);
     connect(timer_serial_comboBox, &QTimer::timeout, this, &MainWindow::serial_updatePortName);
     timer_serial_comboBox->start(1000);
 }
 
 void MainWindow::serial_setDefault() {
-    m_ui->comboBox_Baudrate->setCurrentText("115200");
-    m_ui->comboBox_Databits->setCurrentText("8");
-    m_ui->comboBox_Parity->setCurrentText("None");
-    m_ui->comboBox_Stopbits->setCurrentText("1");
-    m_ui->comboBox_Flowcontrol->setCurrentText("None");
+    const char* defaultText[5] = {"115200", "8", "None", "1", "None"};
+    for(int i = 0; i < COMBOBOX_NUM - 1; i ++) {
+        this->findChild<QComboBox*>(comboBox_Name[i+1])->setCurrentText(defaultText[i]);
+    }
 }
 
 void MainWindow::serial_openPort() {
     if(m_serial->open(QIODevice::ReadWrite)) {
-        m_ui->groupBox_SerialSetting->setEnabled(false);
-        m_ui->pushButton_Serial_Connect->setText("Disconnect");
-        m_ui->pushButton_Serial_Default->setEnabled(false);
         timer_serial_comboBox->stop();
+        m_ui->groupBox_SerialSetting->setEnabled(false);
+        m_ui->pushButton_Serial_Default->setEnabled(false);
+        m_ui->pushButton_Serial_Connect->setText("Disconnect");
         m_status->setText(tr("Connected to %1 : %2, %3, %4, %5, %6")
-                          .arg(m_ui->comboBox_Comport->currentText()).arg(m_ui->comboBox_Baudrate->currentText())
-                          .arg(m_ui->comboBox_Parity->currentText()).arg(m_ui->comboBox_Parity->currentText())
-                          .arg(m_ui->comboBox_Stopbits->currentText()).arg(m_ui->comboBox_Flowcontrol->currentText()));
+                          .arg(m_ui->comboBox_Comport->currentText())
+                          .arg(m_ui->comboBox_Baudrate->currentText())
+                          .arg(m_ui->comboBox_Parity->currentText())
+                          .arg(m_ui->comboBox_Parity->currentText())
+                          .arg(m_ui->comboBox_Stopbits->currentText())
+                          .arg(m_ui->comboBox_Flowcontrol->currentText()));
     } else {
         QMessageBox::critical(this, tr("Error"), m_serial->errorString());
         m_status->setText(tr("Open error"));
@@ -142,105 +163,64 @@ void MainWindow::logs_write(QString message, QColor c) {
 
 void MainWindow::manual_checkBox_event(bool checked) {
     QCheckBox *checkbox = (QCheckBox*)sender();
+    int para_num_show = 0;
     if(checked) {
-        m_ui->checkBox_SetPos->setEnabled(false);
-        m_ui->checkBox_SetWidth->setEnabled(false);
-        m_ui->checkBox_SetHome->setEnabled(false);
-        m_ui->checkBox_SetDuty->setEnabled(false);
-        m_ui->checkBox_SetPosNAng->setEnabled(false);
-        m_ui->checkBox_SetTime->setEnabled(false);
-        m_ui->checkBox_Save->setEnabled(false);
-
-
+        for(int i = 0; i < CHECKBOX_NUM; i++) {
+            this->findChild<QCheckBox*>(checkBox_Name[i])->setEnabled(false);
+        }
         m_ui->pushButton_Request->setEnabled(true);
-        if(checkbox == m_ui->checkBox_SetPos) {
 
-            m_ui->checkBox_SetPos->setEnabled(true);
+        if(checkbox == m_ui->checkBox_SetPos) {
             m_ui->label_Para1->setText("X    ");
             m_ui->label_Para2->setText("Y    ");
             m_ui->label_Para3->setText("Z    ");
-
-            m_ui->label_Para1->show();
-            m_ui->textEdit_Para1->show();
-            m_ui->label_Para2->show();
-            m_ui->textEdit_Para2->show();
-            m_ui->label_Para3->show();
-            m_ui->textEdit_Para3->show();
-
             m_ui->label_ManualExamplePara->setText("X, Y, Z: \"10.2\" ");
+            para_num_show = 3;
+
         } else if(checkbox == m_ui->checkBox_SetWidth) {
-
-            m_ui->checkBox_SetWidth->setEnabled(true);
             m_ui->label_Para1->setText("Width");
-
-            m_ui->label_Para1->show();
-            m_ui->textEdit_Para1->show();
-
             m_ui->label_ManualExamplePara->setText("Width: 3.0 -> 6.0");
-        } else if(checkbox == m_ui->checkBox_SetDuty) {
+            para_num_show = 1;
 
-            m_ui->checkBox_SetDuty->setEnabled(true);
+        } else if(checkbox == m_ui->checkBox_SetDuty) {
             m_ui->label_Para1->setText("Duty");
             m_ui->label_Para2->setText("Channel");
-
-            m_ui->label_Para1->show();
-            m_ui->textEdit_Para1->show();
-            m_ui->label_Para2->show();
-            m_ui->textEdit_Para2->show();
-
             m_ui->label_ManualExamplePara->setText("Duty: 1000 -> 2000, Channel: 1 -> 6");
+            para_num_show = 2;
+
         } else if(checkbox == m_ui->checkBox_SetHome) {
 
-            m_ui->checkBox_SetHome->setEnabled(true);
+            para_num_show = 0;
         } else if(checkbox == m_ui->checkBox_SetPosNAng) {
-
-            m_ui->checkBox_SetPosNAng->setEnabled(true);
             m_ui->label_Para1->setText("X    ");
             m_ui->label_Para2->setText("Y    ");
             m_ui->label_Para3->setText("Z    ");
             m_ui->label_Para4->setText("Angle");
-
-            m_ui->label_Para1->show();
-            m_ui->textEdit_Para1->show();
-            m_ui->label_Para2->show();
-            m_ui->textEdit_Para2->show();
-            m_ui->label_Para3->show();
-            m_ui->textEdit_Para3->show();
-            m_ui->label_Para4->show();
-            m_ui->textEdit_Para4->show();
-
             m_ui->label_ManualExamplePara->setText("X, Y, Z: \"10.2\" ; Angle: 0->90");
+            para_num_show = 4;
+
         } else if(checkbox == m_ui->checkBox_SetTime) {
-
-            m_ui->checkBox_SetTime->setEnabled(true);
             m_ui->label_Para1->setText("Time(ms)");
-
-            m_ui->label_Para1->show();
-            m_ui->textEdit_Para1->show();
-
             m_ui->label_ManualExamplePara->setText("Time: 1000 -> 5000");
-        } else if(checkbox == m_ui->checkBox_Save) {
+            para_num_show = 1;
 
-            m_ui->checkBox_Save->setEnabled(true);
+        } else if(checkbox == m_ui->checkBox_Save) {
+            para_num_show = 0;
+        }
+        checkbox->setEnabled(true);
+        for(int i = 0; i < para_num_show; i ++) {
+            this->findChild<QLabel*>(tr("label_%1").arg(para_Name[i]))->show();
+            this->findChild<QTextEdit*>(tr("textEdit_%1").arg(para_Name[i]))->show();
         }
     } else {
-        m_ui->checkBox_SetPos->setEnabled(true);
-        m_ui->checkBox_SetWidth->setEnabled(true);
-        m_ui->checkBox_SetHome->setEnabled(true);
-        m_ui->checkBox_SetDuty->setEnabled(true);
-        m_ui->checkBox_SetPosNAng->setEnabled(true);
-        m_ui->checkBox_SetTime->setEnabled(true);
-        m_ui->checkBox_Save->setEnabled(true);
-
+        for(int i = 0; i < CHECKBOX_NUM; i ++) {
+            this->findChild<QCheckBox*>(checkBox_Name[i])->setEnabled(true);
+        }
+        for(int i = 0; i < PARA_NUM; i ++) {
+            this->findChild<QLabel*>(tr("label_%1").arg(para_Name[i]))->hide();
+            this->findChild<QTextEdit*>(tr("textEdit_%1").arg(para_Name[i]))->hide();
+        }
         m_ui->pushButton_Request->setEnabled(false);
-        m_ui->label_Para1->hide();
-        m_ui->textEdit_Para1->hide();
-        m_ui->label_Para2->hide();
-        m_ui->textEdit_Para2->hide();
-        m_ui->label_Para3->hide();
-        m_ui->textEdit_Para3->hide();
-        m_ui->label_Para4->hide();
-        m_ui->textEdit_Para4->hide();
         m_ui->label_ManualExamplePara->setText("");
     }
 }
@@ -358,7 +338,6 @@ void MainWindow::serial_updatePortName() {
 }
 
 void MainWindow::serial_updateSetting() {
-
     m_serial->setPortName(m_ui->comboBox_Comport->currentText());
     m_serial->setBaudRate(static_cast<QSerialPort::BaudRate>
                           (m_ui->comboBox_Baudrate->itemData(m_ui->comboBox_Baudrate->currentIndex()).toInt()));
@@ -410,46 +389,45 @@ void MainWindow::camera_init()
     connect(m_ui->pushButton_Calib,&QPushButton::clicked , this, &MainWindow::cv_calib);
     connect(m_ui->pushButton_Run, &QPushButton::clicked, this, &MainWindow::cv_autoRun);
     connect(m_ui->label_Camera_show, &QLabel_custom::mouseReleased, this, &MainWindow::cv_getROI);
-    connect(m_ui->pushButton_SaveImg, &QPushButton::clicked, this, &MainWindow::cv_saveImageFromROI);
+    connect(m_ui->pushButton_SaveImg, &QPushButton::clicked, this, &MainWindow::cv_saveObjectFromROI);
+    connect(m_ui->pushButton_SaveBaseArea, &QPushButton::clicked, this, &MainWindow::cv_saveHSVBaseFromROI);
 
     timer_camera_comboBox = new QTimer(this);
     connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
-    timer_camera_comboBox->start(1000);
+    timer_camera_comboBox->start(MAIN_TIMER_REFRESH);
 
-    connect(m_ui->horizontalSlider_alpha, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
-    connect(m_ui->horizontalSlider_beta, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
-    connect(m_ui->horizontalSlider_gamma, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
-    connect(m_ui->horizontalSlider_BasicBinaryThresh, QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
-
-    connect(m_ui->doubleSpinBox_alpha, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
-    connect(m_ui->doubleSpinBox_beta, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
-    connect(m_ui->doubleSpinBox_gamma, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
-    connect(m_ui->doubleSpinBox_BinaryThresh, &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+    for(int i = 0; i < CAMERA_PARA_NUM; i++) {
+        connect(this->findChild<QSlider*>(tr("horizontalSlider_%1").arg(cameraPara_Name[i])),
+                QOverload<int>::of(&QSlider::valueChanged), this, &MainWindow::dip_sliderChanged);
+        connect(this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i])),
+                &QDoubleSpinBox::editingFinished, this, &MainWindow::dip_spinBoxEditingFinished);
+    }
 
     connect(m_ui->checkBox_EnableHSV, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
     connect(m_ui->checkBox_EnableSUFT, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
 
-    double _alpha, _beta, _gamma;
-    double _threshbinary;
-    ImageProcess::getParameterFromFile(_alpha, _beta, _gamma, _threshbinary);
-    m_ui->doubleSpinBox_alpha->setValue(_alpha);
-    m_ui->doubleSpinBox_beta->setValue(_beta);
-    m_ui->doubleSpinBox_gamma->setValue(_gamma);
-    m_ui->doubleSpinBox_BinaryThresh->setValue(_threshbinary);
-    pre_setSlider(m_ui->doubleSpinBox_alpha, m_ui->horizontalSlider_alpha);
-    pre_setSlider(m_ui->doubleSpinBox_beta, m_ui->horizontalSlider_beta);
-    pre_setSlider(m_ui->doubleSpinBox_gamma, m_ui->horizontalSlider_gamma);
-    pre_setSlider(m_ui->doubleSpinBox_BinaryThresh, m_ui->horizontalSlider_BasicBinaryThresh);
+    double _alpha, _beta, _gamma, _threshbinary;
+    Scalar _hsv_high, _hsv_low;
+    ImageProcess::getParameterFromFile(_alpha, _beta, _gamma, _threshbinary, _hsv_high, _hsv_low);
+    double value[CAMERA_PARA_NUM] = {_alpha, _beta, _gamma, _threshbinary,
+                                     _hsv_high[0], _hsv_low[0], _hsv_high[1],
+                                     _hsv_low[1], _hsv_high[2], _hsv_low[2]};
+    for(int i = 0; i < CAMERA_PARA_NUM; i++) {
+        this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i]))->setValue(value[i]);
+        pre_setSlider(this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i])),
+                      this->findChild<QSlider*>(tr("horizontalSlider_%1").arg(cameraPara_Name[i])));
+    }
 }
 
 void MainWindow::camera_openCamera()
 {
     m_camera.open(m_ui->comboBox_CameraDevice->currentIndex());
+    m_camera.init();
     if(m_camera.isOpened()) {
         m_ui->comboBox_CameraDevice->setEnabled(false);
         m_ui->pushButton_Camera_Connect->setText(tr("Disconnect"));
         timer_camera_comboBox->stop();
-        timer_imgproc->start(DELAY_CAPTURE_20MS);
+        timer_imgproc->start(DIP_MAIN_FPS);
     } else {
         QMessageBox::critical(this, tr("Critical Error"), tr("error open camera"));
     }
@@ -457,12 +435,13 @@ void MainWindow::camera_openCamera()
 
 void MainWindow::camera_closeCamera()
 {
+    m_camera.denit();
     m_camera.release();
     if(m_camera.isOpened()) {
         QMessageBox::critical(this, tr("Critical Error"), tr("error close camera"));
     } else {
         timer_imgproc->stop();
-        timer_camera_comboBox->start(1000);
+        timer_camera_comboBox->start(MAIN_TIMER_REFRESH);
         m_ui->comboBox_CameraDevice->setEnabled(true);
         m_ui->pushButton_Camera_Connect->setText(tr("Connect"));
     }
@@ -499,8 +478,8 @@ void MainWindow::cv_qtshow(Mat img, QImage::Format format)
     QImage* qimage = new QImage(temp.data, temp.cols, temp.rows, temp.step, format);
     m_ui->label_Camera_show->setFixedSize(qimage->size());
     m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
-    temp.release();
-    img.release();
+
+    Debug::_delete(temp, img);
     delete qimage;
 }
 
@@ -521,17 +500,28 @@ void MainWindow::cv_debugImage( Mat image)
 void MainWindow::cv_getROI()
 {
     QRect rect = m_ui->label_Camera_show->getRect();
+//    QPoint _point = m_ui->label_Camera_show->getLastPoint();
     cv_debugImage(m_camera.getMatFromQPixmap(m_ui->label_Camera_show->grab(rect)));
 }
 
-void MainWindow::cv_saveImageFromROI()
+void MainWindow::cv_saveObjectFromROI()
 {
     if(cv_image.empty()) {
         M_DEBUG("cv image is empty");
         return;
     }
     imwrite(ImageProcess::getNode(ImageProcess::PathObjectImageSave), cv_image);
-    QMessageBox::information(this, tr("image"), tr("save ok"));
+    QMessageBox::information(this, tr("Object"), tr("save ok"));
+    emit cv_signalShow(true);
+}
+
+void MainWindow::cv_saveHSVBaseFromROI()
+{
+    if(cv_image.empty()) {
+        M_DEBUG("cv image is empty");
+        return;
+    }
+    QMessageBox::information(this, tr("Base"), tr("save ok"));
     emit cv_signalShow(true);
 }
 
@@ -560,11 +550,12 @@ void MainWindow::pre_setSpinBox(QSlider *slider, QDoubleSpinBox *spinbox)
 void MainWindow::cv_show(bool dynamic) {
     // stop timer timeout
     if(dynamic) {
-        timer_imgproc->start(DELAY_CAPTURE_20MS);
+        timer_imgproc->start(DIP_MAIN_FPS);
         Mat show_img;
-        m_camera.preProcess();
+        m_camera.process();
         m_camera.getImage(show_img);
         cv_qtshow(show_img, QImage::Format_RGB888);
+        Debug::_delete(show_img);
     } else {
         timer_imgproc->stop();
         if(cv_image.empty()) {
@@ -588,36 +579,24 @@ void MainWindow::cv_calib()
         QMessageBox::information(this, tr("Calib"), tr("move pattern (%1/10 images)").arg(i+1));
         grayImage = m_camera.getImageFromCamera(COLOR_BGR2GRAY);
         if( m_camera.getPattern2CalibCamera(grayImage, (float)0.025, patternSize,
-                                                 listImagePoints, listRealPoints) == false ) {
-
+                                            listImagePoints, listRealPoints) == false ) {
             m_ui->pushButton_Calib->setEnabled(true);
-            listImagePoints.clear();
-            listRealPoints.clear();
-            grayImage.release();
+            Debug::_delete(listImagePoints, listRealPoints, grayImage);
             return;
         }
     }
-
     m_camera.calibCamera(listImagePoints, listRealPoints, grayImage.size());
 
     vector<Point2f> imagePoints, realPoints;
     if( m_camera.getPattern2CalibRobot(grayImage, (float)25.0, patternSize,
-                                            imagePoints, realPoints) == false ) {
+                                       imagePoints, realPoints) == false ) {
         m_ui->pushButton_Calib->setEnabled(true);
-        listImagePoints.clear();
-        listRealPoints.clear();
-        grayImage.release();
-        imagePoints.clear();
-        realPoints.clear();
+        Debug::_delete(listImagePoints, listRealPoints, grayImage, imagePoints, realPoints);
         return;
     }
     m_camera.calibRobot(imagePoints, realPoints);
 
-    listImagePoints.clear();
-    listRealPoints.clear();
-    grayImage.release();
-    imagePoints.clear();
-    realPoints.clear();
+    Debug::_delete(listImagePoints, listRealPoints, grayImage, imagePoints, realPoints);
     m_ui->pushButton_Calib->setEnabled(true);
 }
 
@@ -626,33 +605,12 @@ void MainWindow::cv_autoRun()
     Point2f center_img = m_camera.getCenter();
     Point2f center_real;
 
-    center_img = m_camera.getCenter();
     if(center_img.x == 0 && center_img.y == 0) {
         return;
     }
-    ImageProcess::convertToRealPoint(center_img, center_real);
+    ImageProcess::toReal(center_img, center_real);
     qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
     m_serial->setWidthNPosition(center_real, 2000, 3);
-
-    //x = 62.5 , y = 125
-
-    // change to detect image point of object
-    //    vector<Point2f> imagePoints, realPoints;
-    //    if( ImageProcess::getPattern2CalibRobot(grayImg, (float)25.0, Size(8, 6),
-    //                                 imagePoints, realPoints) == false ) {
-    //        return;
-    //    }
-
-    //    M_DEBUG("testting");
-    //    Mat real = (Mat_<double>(2, 1) << realPoints.at(idx).x, realPoints.at(idx).y);
-    //    Mat img = (Mat_<double>(2, 1) << imagePoints.at(idx).x, imagePoints.at(idx).y);
-    //    M_DEBUG(img);
-    //    M_DEBUG(real);
-
-    //    // get real point
-    //    Point2f res;
-    //    cv_convertToRealPoint(imagePoints.at(idx), res);
-    //    qDebug() << tr("x:%1, y:%2").arg(realPoints.x).arg(realPoints.y);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()
@@ -673,36 +631,35 @@ void MainWindow::dip_sliderChanged(int value)
 {
     Q_UNUSED(value);
     QSlider *slider = (QSlider*)sender();
-    if(slider == m_ui->horizontalSlider_alpha) {
-        pre_setSpinBox(m_ui->horizontalSlider_alpha, m_ui->doubleSpinBox_alpha);
-
-    } else if(slider == m_ui->horizontalSlider_beta) {
-        pre_setSpinBox(m_ui->horizontalSlider_beta, m_ui->doubleSpinBox_beta);
-
-    } else if(slider == m_ui->horizontalSlider_gamma) {
-        pre_setSpinBox(m_ui->horizontalSlider_gamma, m_ui->doubleSpinBox_gamma);
-
-    } else if(slider == m_ui->horizontalSlider_BasicBinaryThresh) {
-        pre_setSpinBox(m_ui->horizontalSlider_BasicBinaryThresh, m_ui->doubleSpinBox_BinaryThresh);
+    for(int i = 0; i < CAMERA_PARA_NUM; i ++) {
+        if(slider == this->findChild<QSlider*>(tr("horizontalSlider_%1").arg(cameraPara_Name[i]))) {
+            pre_setSpinBox(slider, this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1")
+                                                                    .arg(cameraPara_Name[i])));
+            break;
+        }
     }
-    m_camera.setPreProcessParameter(m_ui->doubleSpinBox_gamma->value(), m_ui->doubleSpinBox_alpha->value(),
-                                    m_ui->doubleSpinBox_beta->value(), m_ui->doubleSpinBox_BinaryThresh->value());
+
+    Scalar _hsv_max(m_ui->doubleSpinBox_Hmax->value(),
+                    m_ui->doubleSpinBox_Smax->value(),
+                    m_ui->doubleSpinBox_Vmax->value());
+    Scalar _hsv_min(m_ui->doubleSpinBox_Hmin->value(),
+                    m_ui->doubleSpinBox_Smin->value(),
+                    m_ui->doubleSpinBox_Vmin->value());
+    m_camera.setPreProcessParameter(m_ui->doubleSpinBox_gamma->value(),
+                                    m_ui->doubleSpinBox_alpha->value(),
+                                    m_ui->doubleSpinBox_beta->value(),
+                                    m_ui->doubleSpinBox_BinaryThresh->value(),
+                                    _hsv_max, _hsv_min);
 }
 
 void MainWindow::dip_spinBoxEditingFinished()
 {
     QDoubleSpinBox *spinbox = (QDoubleSpinBox*)sender();
-    if(spinbox == m_ui->doubleSpinBox_alpha) {
-        pre_setSlider(m_ui->doubleSpinBox_alpha, m_ui->horizontalSlider_alpha);
-
-    } else if(spinbox == m_ui->doubleSpinBox_beta) {
-        pre_setSlider(m_ui->doubleSpinBox_beta, m_ui->horizontalSlider_beta);
-
-    } else if(spinbox == m_ui->doubleSpinBox_gamma) {
-        pre_setSlider(m_ui->doubleSpinBox_gamma, m_ui->horizontalSlider_gamma);
-
-    } else if(spinbox == m_ui->doubleSpinBox_BinaryThresh) {
-        pre_setSlider(m_ui->doubleSpinBox_BinaryThresh, m_ui->horizontalSlider_BasicBinaryThresh);
+    for(int i = 0; i < CAMERA_PARA_NUM; i ++) {
+        if(spinbox == this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i]))) {
+            pre_setSlider(spinbox, this->findChild<QSlider*>(tr("horizontalSlider_%1").arg(cameraPara_Name[i])));
+            break;
+        }
     }
 }
 
@@ -726,5 +683,4 @@ void MainWindow::dip_checkBoxEnableClicked(bool checked)
         m_ui->groupBox_SUFT->setEnabled(true);
         m_camera.setMode(m_camera.ModeNull);
     }
-
 }

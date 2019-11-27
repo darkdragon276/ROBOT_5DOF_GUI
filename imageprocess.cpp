@@ -10,6 +10,8 @@ const char* ImageProcess::NODEPATH[ImageProcess::NumOfMat] = {
     "BetaParameter",
     "GammaParameter",
     "ThreshBinaryParameter",
+    "HSVMaxParameter",
+    "HSVMinParamter",
     "cameraMatrix.yml",
     "robotMatrix.yml",
     "./images/object.jpg",
@@ -18,7 +20,7 @@ const char* ImageProcess::NODEPATH[ImageProcess::NumOfMat] = {
 
 ImageProcess::ImageProcess()
 {
-
+    this->set(CAP_PROP_FPS, DIP_CAMERA_FPS);
 }
 
 ImageProcess::~ImageProcess()
@@ -26,25 +28,22 @@ ImageProcess::~ImageProcess()
 
 }
 
-void ImageProcess::deBug(string file, int line, string function, string message)
+void ImageProcess::init()
 {
-    ostringstream oss;
-    oss << file << "(" << line << ")" << "/" << function << ":" << message << endl;
-    qDebug().noquote() << oss.str().c_str();
+    _timer_release_buffer = new QTimer(this);
+    QObject::connect(_timer_release_buffer, &QTimer::timeout, this, &ImageProcess::_grabImage);
+    _timer_release_buffer->start(DIP_TIMER_FPS);
 }
 
-void ImageProcess::deBug(string file, int line, string function, const char *message)
+void ImageProcess::denit()
 {
-    ostringstream oss;
-    oss << file << "(" << line << ")" << "/" << function << ":" << message << endl;
-    qDebug().noquote() << oss.str().c_str();
+    Debug::_delete(img);
+    _timer_release_buffer->stop();
 }
 
-void ImageProcess::deBug(string file, int line, string function, Mat message)
+void ImageProcess::_grabImage()
 {
-    ostringstream oss;
-    oss << file << "(" << line << ")" << "/" << function << ":" << message << endl;
-    qDebug().noquote() << oss.str().c_str();
+    this->grab();
 }
 
 void ImageProcess::deBugImage(Mat img)
@@ -69,20 +68,26 @@ void ImageProcess::getMatFromFile(nodePath_t node, nodePath_t filepath,
     file.release();
 }
 
-void ImageProcess::getParameterFromFile(double &_alpha, double &_beta, double &_gamma, double &_threshbinary)
+void ImageProcess::getParameterFromFile(double &_alpha, double &_beta, double &_gamma,
+                                        double &_threshbinary, Scalar &_hsv_max, Scalar &_hsv_min)
 {
     FileStorage file(getNode(PathDIPParameter), FileStorage::READ );
     file[getNode(AlphaDouble)] >> _alpha;
     file[getNode(BetaDouble)] >> _beta;
     file[getNode(GammaDouble)] >> _gamma;
     file[getNode(ThreshBinaryDouble)] >> _threshbinary;
+    file[getNode(HSVMaxScalar)] >> _hsv_max;
+    file[getNode(HSVMinScalar)] >> _hsv_min;
     file.release();
 }
 
 Mat ImageProcess::getMatFromQPixmap(QPixmap pixmap)
 {
     QImage qimg = pixmap.toImage().convertToFormat(QImage::Format_RGB888).rgbSwapped();
-    return Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
+    Mat temp = Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
+    uchar* _dealloc = qimg.bits();
+    delete _dealloc;
+    return temp;
 }
 
 bool ImageProcess::undistortImage(Mat grayImage, Mat &undistortImage) {
@@ -95,17 +100,15 @@ bool ImageProcess::undistortImage(Mat grayImage, Mat &undistortImage) {
     getMatFromFile(DistMat, PathIntrincyPara, distortMat);
     if(camMat.empty() || distortMat.empty()) {
         M_DEBUG("camMat or distortMat input is empty");
-        camMat.release();
-        distortMat.release();
+        Debug::_delete(camMat, distortMat);
         return false;
     }
     Mat tempImage;
     undistort( grayImage, tempImage, camMat, distortMat);
     undistortImage.release();
     undistortImage = tempImage.clone();
-    tempImage.release();
-    camMat.release();
-    distortMat.release();
+
+    Debug::_delete(tempImage, camMat, distortMat);
     return true;
 }
 
@@ -124,8 +127,7 @@ bool ImageProcess::getPattern2CalibCamera(Mat grayImage, float realPointDistance
     }
     if(grayImage.empty()) {
         M_DEBUG("grayImage input is empty");
-        imagePoints.clear();
-        realPoints.clear();
+        Debug::_delete(imagePoints, realPoints);
         return false;
     }
     if( findChessboardCorners(grayImage, patternSize, imagePoints,
@@ -136,13 +138,11 @@ bool ImageProcess::getPattern2CalibCamera(Mat grayImage, float realPointDistance
         listRealPoints.push_back(realPoints);
     } else {
         M_DEBUG("can't find corner");
-        imagePoints.clear();
-        realPoints.clear();
+        Debug::_delete(imagePoints, realPoints);
         return false;
     }
 
-    imagePoints.clear();
-    realPoints.clear();
+    Debug::_delete(imagePoints, realPoints);
     return true;
 }
 
@@ -150,13 +150,6 @@ bool ImageProcess::getPattern2CalibCamera(Mat grayImage, float realPointDistance
 bool ImageProcess::getPattern2CalibRobot(Mat grayImage, float realPointDistance,
                                          Size patternSize, vector<Point2f> &imagePoints,
                                          vector<Point2f> &realPoints) {
-
-    //    Mat uImage;
-    //    if(undistortImage(grayImage, uImage) == false) {
-    //        M_DEBUG("undistort error");
-    //        uImage.release();
-    //        return false;
-    //    }
     Mat uImage = grayImage.clone();
     Point2f Obset(- 3.5*realPointDistance, 1*realPointDistance + 50); // mm
     if( findChessboardCorners(uImage, patternSize, imagePoints,
@@ -170,13 +163,13 @@ bool ImageProcess::getPattern2CalibRobot(Mat grayImage, float realPointDistance,
         }
     } else {
         M_DEBUG("can't find corner");
-        uImage.release();
+        Debug::_delete(uImage);
         return false;
     }
     // debug image
     drawChessboardCorners(uImage, patternSize, imagePoints, true);
     deBugImage(uImage);
-    uImage.release();
+    Debug::_delete(uImage);
     return true;
 }
 
@@ -201,10 +194,7 @@ void ImageProcess::calibCamera( vector<vector<Point2f>> listImagePoints,
     file << getNode(DistMat) << distortMat;
 
     file.release();
-    camMat.release();
-    distortMat.release();
-    rMat.release();
-    tMat.release();
+    Debug::_delete(camMat, distortMat, rMat, tMat);
 }
 
 void ImageProcess::calibRobot( vector<Point2f> vecImagePoints,
@@ -242,11 +232,7 @@ void ImageProcess::calibRobot( vector<Point2f> vecImagePoints,
     file << getNode(S1to0Mat) << S1to0;
 
     file.release();
-    point0.release();
-    point1.release();
-    R1to0.release();
-    T1to0.release();
-    S1to0.release();
+    Debug::_delete(point0, point1, R1to0, T1to0, S1to0);
 }
 
 void ImageProcess::getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &keypoint_object,
@@ -280,91 +266,46 @@ void ImageProcess::getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &
     }
     // Must return vector<vector<keypoint>> tuong ung voi vector<vector<scene>>
     //-- Release memory
-    detector.release();
-    keypoints_object.clear();
-    keypoints_scene.clear();
-    descriptors_object.release();
-    descriptors_scene.release();
-    matcher.release();
-    matches.clear();
-    knn_matches.clear();
-    img_object.release();
-    img_scene.release();
-
-    //-- Draw matches
-    //    Mat img_matches;
-    //    drawMatches( img_scene, keypoints_scene, img_object, keypoints_object, matches, img_matches, Scalar::all(-1),
-    //                 Scalar::all(-1), std::vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-    //    cv_debugImage(img_matches, false);
-    //    img_matches.release();
+    Debug::_delete(detector, keypoints_object, keypoints_scene, descriptors_object,
+                   descriptors_scene, matcher, matches, knn_matches, img_object, img_scene);
 }
 
-//-- Function return point is devided into group.
-//-- pointInGroup_idx is reference from point_list.
-void ImageProcess::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
-                                          vector<vector<int>> &pointInGroup_idx) {
-    if(point_list.empty()) {
-        M_DEBUG("error empty input");
-        return;
-    }
-    if(max_distance <= 0) {
-        M_DEBUG("error distance input");
-        return;
-    }
-    vector<bool> check(point_list.size(), false);
-    vector<int> temp_idx;
-
-    for(size_t i = 0; i < point_list.size(); i++) {
-        if(check.at(i)) {
-            continue;
-        } else {
-            temp_idx.push_back(i);
-            check.at(i) = true;
-            for( size_t t = i + 1; t < point_list.size(); t++) {
-                if(check.at(t)) {
-                    continue;
-                } else {
-                    if( norm(point_list.at(i) - point_list.at(t)) < max_distance) {
-                        temp_idx.push_back(t);
-                        check.at(t) = true;
-                    }
-                }
-            }
-            pointInGroup_idx.push_back(temp_idx);
-            temp_idx.clear();
-        }
-    }
-    M_DEBUG(to_string(pointInGroup_idx.size()));
-}
-
-void ImageProcess::drawRoiAroundObject(Mat imgObject, Mat imgScene, vector<Point2f> PointObject,
-                                       vector<Point2f> PointScene, vector<vector<int>> groupPointIdx)
+void ImageProcess::homographyTranform(Mat imgObject, Mat imgScene, vector<Point2f> PointObject,
+                                      vector<Point2f> PointScene, vector<vector<int>> groupPointIdx,
+                                      vector<Point2f> &_vec_center)
 {
     vector<Point2f> object, scene;
     vector<Point2f> centerObject;
     centerObject.push_back(Point2f((double)(imgObject.rows / 2), (double)(imgObject.cols / 2)));
     vector<Point2f> centerScene;
 
+    if(!_vec_center.empty()) {
+        _vec_center.clear();
+    }
+    Mat H;
     for(size_t i = 0; i < groupPointIdx.size(); i++) {
         for(size_t z = 0; z <groupPointIdx.at(i).size(); z++) {
             object.push_back(PointObject.at(groupPointIdx.at(i).at(z)));
             scene.push_back(PointScene.at(groupPointIdx.at(i).at(z)));
         }
-
-        Mat H = findHomography(object, scene, RANSAC);
+        H.release();
+        H = findHomography(object, scene, RANSAC);
         if(H.empty()) {
             M_DEBUG("H empty");
         } else {
             perspectiveTransform(centerObject, centerScene, H);
-            circle(imgScene, centerScene.at(0), 10, Scalar(0, 0, 255));
+            _vec_center.push_back(PointProcess::meansVectorPoints(centerScene));
+            circle(imgScene, _vec_center.back(), 3, Scalar(255, 0, 255), 3);
+            M_DEBUG(_vec_center.back());
             M_DEBUG("well");
         }
         object.clear();
         scene.clear();
     }
+    Debug::_delete(object, scene, centerObject, centerScene, H);
 }
 
-bool ImageProcess::convertToRealPoint(Point2f imagePoint, Point2f &realPoint) {
+bool ImageProcess::toReal(Point2f imagePoint, Point2f &realPoint) {
     Mat rMat, sMat, tMat;
     Mat imgPoint = (Mat_<double>(2, 1) << imagePoint.x, imagePoint.y);
     getMatFromFile(R1to0Mat, PathCordinateConvertPara, rMat);
@@ -372,9 +313,7 @@ bool ImageProcess::convertToRealPoint(Point2f imagePoint, Point2f &realPoint) {
     getMatFromFile(T1to0Mat, PathCordinateConvertPara, tMat);
     if(rMat.empty() || sMat.empty() || tMat.empty()) {
         M_DEBUG("rMat or sMat or tMat empty");
-        rMat.release();
-        sMat.release();
-        tMat.release();
+        Debug::_delete(rMat, sMat, tMat, imgPoint);
         return false;
     }
     Mat res = sMat * rMat * imgPoint + tMat;
@@ -382,14 +321,35 @@ bool ImageProcess::convertToRealPoint(Point2f imagePoint, Point2f &realPoint) {
     realPoint.x = res.at<double>(0, 0);
     realPoint.y = res.at<double>(1, 0);
 
-    rMat.release();
-    sMat.release();
-    tMat.release();
-    res.release();
+    Debug::_delete(rMat, sMat, tMat, imgPoint, res);
     return true;
 }
 
-void ImageProcess::gammaCorrectionContrast(Mat img, double gamma_, Mat &res)
+bool ImageProcess::toReal(double _img_pixel, double &_real_distance)
+{
+    Mat rMat, sMat, tMat;
+    Mat imgPoint_origin = (Mat_<double>(2, 1) << 0, 0);
+    Mat imgPoint_distance = (Mat_<double>(2,1) << 0, _img_pixel);
+    getMatFromFile(R1to0Mat, PathCordinateConvertPara, rMat);
+    getMatFromFile(S1to0Mat, PathCordinateConvertPara, sMat);
+    getMatFromFile(T1to0Mat, PathCordinateConvertPara, tMat);
+    if(rMat.empty() || sMat.empty() || tMat.empty()) {
+        M_DEBUG("rMat or sMat or tMat empty");
+        Debug::_delete(rMat, sMat, tMat, imgPoint_origin, imgPoint_distance);
+        return false;
+    }
+    Mat real_origin = sMat * rMat * imgPoint_origin + tMat;
+    Mat real_distance = sMat * rMat * imgPoint_distance + tMat;
+    Point2f real_point_origin(real_origin.at<double>(0,0), real_origin.at<double>(0,1));
+    Point2f real_point_distance(real_distance.at<double>(0,0), real_distance.at<double>(0,1));
+    _real_distance = norm(real_point_origin - real_point_distance);
+
+    Debug::_delete(rMat, sMat, tMat, imgPoint_origin, imgPoint_distance,
+                   real_origin, real_distance);
+    return true;
+}
+
+void ImageProcess::gammaCorrectionContrast(Mat _img, double gamma_, Mat &res)
 {
     CV_Assert(gamma_ >= 0);
     Mat lookUpTable(1, 256, CV_8U);
@@ -397,58 +357,15 @@ void ImageProcess::gammaCorrectionContrast(Mat img, double gamma_, Mat &res)
     for( int i = 0; i < 256; ++i) {
         p[i] = saturate_cast<uchar>(pow(i / 255.0, gamma_) * 255.0);
     }
-    res = img.clone();
-    LUT(img, lookUpTable, res);
+    res = _img.clone();
+    LUT(_img, lookUpTable, res);
+    Debug::_delete(lookUpTable);
+    delete p;
 }
 
-void ImageProcess::basicLinearTransformContrast(Mat img, double alpha_, int beta_, Mat &res)
+void ImageProcess::basicLinearTransformContrast(Mat _img, double alpha_, int beta_, Mat &res)
 {
-    img.convertTo(res, -1, alpha_, beta_);
-}
-
-void ImageProcess::drawShapes( vector<vector<Point>> Shapes, Mat &image,
-                               Scalar_<double> &color ,const String &nameshapes)
-{
-    Q_UNUSED(nameshapes);
-    int n = 1;
-    Point_<int> p;
-    const Point* a = &p;
-    for( size_t i = 0; i < Shapes.size(); i++ ) {
-        p = Point_<int>(0,0);
-        for(size_t j = 0; j < Shapes[i].size(); j++) {
-            p += Shapes[i][j];
-        }
-        //  (int)Shapes[i].size();
-        //  putText(image, nameshapes, p[0],FONT_HERSHEY_COMPLEX_SMALL, 1, color, 1, LINE_AA);
-        p = p/int(Shapes[i].size());
-        polylines(image, &a, &n, 1, true, color, 5, FILLED );
-    }
-}
-
-Point2f ImageProcess::avgVectorPoints(vector<Point2f> vecPoint)
-{
-    if(vecPoint.empty()) {
-        M_DEBUG("input error");
-        return Point2f(0, 0);
-    }
-    Point2f temp(0, 0);
-    for(size_t i = 0; i < vecPoint.size(); i ++) {
-        temp += vecPoint.at(i);
-    }
-    return Point2f(temp.x / (double)vecPoint.size(), temp.y / (double)vecPoint.size());
-}
-
-Point2f ImageProcess::avgVectorPoints(vector<Point> vecPoint)
-{
-    if(vecPoint.empty()) {
-        M_DEBUG("input error");
-        return Point2f(0, 0);
-    }
-    Point2f temp(0, 0);
-    for(size_t i = 0; i < vecPoint.size(); i ++) {
-        temp += Point2f((double)vecPoint.at(i).x, (double)vecPoint.at(i).y);
-    }
-    return Point2f(temp.x / (double)vecPoint.size(), temp.y / (double)vecPoint.size());
+    _img.convertTo(res, -1, alpha_, beta_);
 }
 
 void ImageProcess::getImage(Mat &image)
@@ -466,18 +383,15 @@ void ImageProcess::setImage(Mat image)
     M_DEBUG("image is empty");
 }
 
-void ImageProcess::setHSVRange(Scalar _hsv_high, Scalar _hsv_low)
-{
-    hsv_high = _hsv_high;
-    hsv_low = _hsv_low;
-}
-
-void ImageProcess::setPreProcessParameter(double _gamma, double _alpha, double _beta, double _threshbinary)
+void ImageProcess::setPreProcessParameter(double _gamma, double _alpha, double _beta,
+                                          double _threshbinary, Scalar _hsv_high, Scalar _hsv_low)
 {
     gamma = _gamma;
     alpha = _alpha;
     beta = _beta;
     threshbinary = _threshbinary;
+    hsv_high = _hsv_high;
+    hsv_low = _hsv_low;
     setParameterIntoFile();
 }
 
@@ -489,23 +403,9 @@ void ImageProcess::setParameterIntoFile()
     file << getNode(BetaDouble) << beta;
     file << getNode(GammaDouble) << gamma;
     file << getNode(ThreshBinaryDouble) << threshbinary;
+    file << getNode(HSVMaxScalar) << hsv_high;
+    file << getNode(HSVMinScalar) << hsv_low;
     file.release();
-}
-
-void ImageProcess::setVectorPoint(Point2f _point)
-{
-    if(data_point.size() == (size_t)MAX_DATA_SIZE) {
-        data_point.erase(data_point.begin());
-    }
-    data_point.push_back(_point);
-}
-
-Point2f ImageProcess::getCenter()
-{
-    if(data_point.empty()) {
-        return Point2f(0, 0);
-    }
-    return avgVectorPoints(data_point);
 }
 
 Mat ImageProcess::getImageFromCamera( ColorConversionCodes flag) {
@@ -514,7 +414,7 @@ Mat ImageProcess::getImageFromCamera( ColorConversionCodes flag) {
         return Mat();
     }
     Mat imageColor, imageConvert;
-    this->operator >>(imageColor);
+    this->retrieve(imageColor);
     if(flag == COLOR_BGR2BGRA) {
         imageConvert.release();
         return imageColor;
@@ -530,70 +430,108 @@ void ImageProcess::setMode(ImageProcess::processMode_t _mode)
     mode = _mode;
 }
 
-void ImageProcess::preProcess()
+void ImageProcess::process()
 {
     if(mode == ModeDebug) {
         return;
     }
+
+    // preprocessing
     Mat raw_img = getImageFromCamera();
     Mat gamma_img, linear_img, blur_img;
     gammaCorrectionContrast(raw_img, gamma, gamma_img);
     basicLinearTransformContrast(gamma_img, alpha, (int)beta, linear_img);
     medianBlur (linear_img, blur_img, 3);
-
-    if(mode == ModeBasicProcessing) {
-        Mat gray_img, thresh_img;
-        cvtColor(blur_img, gray_img, COLOR_BGR2GRAY);
-        threshold(gray_img, thresh_img, threshbinary, 255, THRESH_BINARY);
-
-        vector<vector<Point>> Shapes;
-        vector<vector<Point>> contours;
-        vector<Point> approx;
-        findContours(thresh_img, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
-        Scalar_<double> circles = Scalar(255, 255, 100);
-        for( size_t i = 0; i < contours.size(); i++ ) {
-            approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.1, true);
-            if(fabs(contourArea(approx)) > 2000 && fabs(contourArea(approx)) < 30000
-               && isContourConvex(approx)) {
-                Shapes.push_back(approx);
-            }
-        }
-        if(Shapes.empty()) {
-            setImage(blur_img);
-            return;
-        }
-        drawShapes(Shapes, blur_img, circles, "circle");
-        setVectorPoint(avgVectorPoints(Shapes.at(0)));
-        circle(blur_img, getCenter(), 1, Scalar(122, 122 ,122), 2);
-        setImage(blur_img);
-    } else if(mode == ModeSUFT) {
-        // suft matching
-        Mat img_object = imread(getNode(PathObjectImageSave));
-        Mat img_scene = linear_img.clone();
-        //    ImageProcess::undistortImage(img_scene, img_scene);
-
-        vector<Point2f> matchObjectPoint;
-        vector<Point2f> matchScenePoint;
-        try{
-            getMatchesFromObject(img_object, img_scene, matchObjectPoint, matchScenePoint);
-
-            vector<vector<int>> groupPointIdx;
-            hierarchicalClustering(matchScenePoint, 70.0, groupPointIdx);
-
-            for(size_t i = 0; i < groupPointIdx.size(); i++) {
-                for(size_t y = 0; y < groupPointIdx.at(i).size(); y++) {
-                    circle(img_scene, matchScenePoint.at(groupPointIdx.at(i).at(y)),
-                           1, Scalar(i*10+100, i*20+100, i*70+10), 2);
-                }
-            }
-            drawRoiAroundObject(img_object, img_scene, matchObjectPoint, matchScenePoint, groupPointIdx);
-        } catch(const char* msg) {
-        }
-        setImage(img_scene);
-
-    } else {
+    if(mode == ModeNull) {
         setImage(linear_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img);
+        return;
     }
 
-    //    inRange(img, hsv_low, hsv_high, img);
+    // basic processing
+    Mat bsp_img = blur_img.clone();
+    basicProcess(bsp_img);
+    if(mode == ModeBasicProcessing) {
+        setImage(bsp_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, bsp_img);
+        return;
+    }
+
+    // suft matching
+    Mat sp_img = blur_img.clone();
+    suftProcess(sp_img);
+    if(mode == ModeSUFT) {
+        setImage(sp_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, bsp_img, sp_img);
+        return;
+    }
+}
+
+void ImageProcess::basicProcess(Mat &color_img)
+{
+    Mat temp_img = color_img.clone();
+    Mat gray_img, thresh_img, hsv_img;
+    cvtColor(temp_img, gray_img, COLOR_BGR2GRAY);
+//    inRange(hsv_img, hsv_low, hsv_high, gray_img);
+    threshold(gray_img, thresh_img, threshbinary, 255, THRESH_BINARY);
+    // find contour
+    vector<vector<Point>> Shapes;
+    vector<vector<Point>> contours;
+    vector<Point> approx;
+    findContours(thresh_img, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
+    for( size_t i = 0; i < contours.size(); i++ ) {
+        approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.1, true);
+        if(fabs(contourArea(approx)) > 2000 && fabs(contourArea(approx)) < 30000 &&
+                isContourConvex(approx)) {
+            Shapes.push_back(approx);
+        }
+    }
+    if(Shapes.empty()) {
+        M_DEBUG("shape empty");
+        Debug::_delete(Shapes, contours, approx, temp_img, gray_img, thresh_img, hsv_img);
+        return;
+    }
+    // point processing
+    vector<Point2f> vec_temp;
+    for(size_t i = 0; i < Shapes.size(); i++) {
+        vec_temp.push_back(point_process.meansVectorPoints(
+                                PointProcess::toVectorPoint2f(Shapes.at(i))));
+    }
+    point_process.setVecPoint(vec_temp);
+    while(!point_process.isReadyGet(vec_temp));
+    for(size_t i = 0; i < vec_temp.size(); i++) {
+        circle(color_img, vec_temp.at(i), 2, Scalar(255, 255, 0), 2);
+    }
+    setCenter(vec_temp.at(0));
+
+    Debug::_delete(Shapes, contours, approx, vec_temp, temp_img, hsv_img,
+                   gray_img, thresh_img);
+}
+
+void ImageProcess::suftProcess(Mat &color_img)
+{
+    Mat img_object = imread(getNode(PathObjectImageSave));
+    Mat img_scene = color_img.clone();
+    vector<Point2f> matchObjectPoint;
+    vector<Point2f> matchScenePoint;
+    vector<Point2f> center;
+    vector<vector<int>> groupPoint_idx;
+    try{
+        getMatchesFromObject(img_object, img_scene, matchObjectPoint, matchScenePoint);
+        point_process.hierarchicalClustering(matchScenePoint, 70.0, MAX_GROUP_NUM, groupPoint_idx);
+        homographyTranform(img_object, color_img, matchObjectPoint, matchScenePoint,
+                           groupPoint_idx, center);
+    } catch(const char* msg) {
+        Debug::_delete(img_object, img_scene, matchObjectPoint, matchScenePoint, center,
+                       groupPoint_idx);
+    }
+}
+
+void ImageProcess::setCenter(Point2f _center)
+{
+    center = _center;
+}
+
+Point2f ImageProcess::getCenter() {
+    return center;
 }
