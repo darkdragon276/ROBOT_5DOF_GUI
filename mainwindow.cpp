@@ -479,7 +479,7 @@ void MainWindow::cv_qtshow(Mat img, QImage::Format format)
     m_ui->label_Camera_show->setFixedSize(qimage->size());
     m_ui->label_Camera_show->setPixmap(QPixmap::fromImage(*qimage));
 
-    Debug::_delete(temp, img);
+    Debug::_delete(temp);
     delete qimage;
 }
 

@@ -360,7 +360,6 @@ void ImageProcess::gammaCorrectionContrast(Mat _img, double gamma_, Mat &res)
     res = _img.clone();
     LUT(_img, lookUpTable, res);
     Debug::_delete(lookUpTable);
-    delete p;
 }
 
 void ImageProcess::basicLinearTransformContrast(Mat _img, double alpha_, int beta_, Mat &res)

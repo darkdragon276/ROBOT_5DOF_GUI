@@ -72,8 +72,6 @@ public:
         Debug::_delete(arg);
         Debug::_delete(args...);
     }
-
-
 };
 
 #endif // DEBUG_H
