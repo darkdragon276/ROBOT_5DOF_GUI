@@ -775,7 +775,7 @@
              <item>
               <widget class="QPushButton" name="pushButton_Run">
                <property name="text">
-                <string>AutoRun</string>
+                <string>Run</string>
                </property>
               </widget>
              </item>
@@ -793,7 +793,7 @@
               </spacer>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_SaveImg">
+              <widget class="QPushButton" name="pushButton_SaveObject">
                <property name="text">
                 <string>Save Object</string>
                </property>

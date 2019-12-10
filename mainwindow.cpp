@@ -386,11 +386,12 @@ void MainWindow::camera_init()
     timer_imgproc = new QTimer(this);
     connect(timer_imgproc, &QTimer::timeout, this, &MainWindow::cv_timeout);
     connect(this, QOverload<bool>::of(&MainWindow::cv_signalShow), this, &MainWindow::cv_show);
+    connect(m_ui->label_Camera_show, &QLabel_custom::mouseReleased, this, &MainWindow::cv_getROI);
+
     connect(m_ui->pushButton_Calib,&QPushButton::clicked , this, &MainWindow::cv_calib);
     connect(m_ui->pushButton_Run, &QPushButton::clicked, this, &MainWindow::cv_autoRun);
-    connect(m_ui->label_Camera_show, &QLabel_custom::mouseReleased, this, &MainWindow::cv_getROI);
-    connect(m_ui->pushButton_SaveImg, &QPushButton::clicked, this, &MainWindow::cv_saveObjectFromROI);
-    connect(m_ui->pushButton_SaveBaseArea, &QPushButton::clicked, this, &MainWindow::cv_saveHSVBaseFromROI);
+    connect(m_ui->pushButton_SaveObject, &QPushButton::clicked, this, &MainWindow::cv_saveImageFromROI);
+    connect(m_ui->pushButton_SaveBaseArea, &QPushButton::clicked, this, &MainWindow::cv_saveImageFromROI);
 
     timer_camera_comboBox = new QTimer(this);
     connect(timer_camera_comboBox, &QTimer::timeout, this, &MainWindow::camera_updateDevice);
@@ -500,28 +501,24 @@ void MainWindow::cv_debugImage( Mat image)
 void MainWindow::cv_getROI()
 {
     QRect rect = m_ui->label_Camera_show->getRect();
-//    QPoint _point = m_ui->label_Camera_show->getLastPoint();
     cv_debugImage(m_camera.getMatFromQPixmap(m_ui->label_Camera_show->grab(rect)));
 }
 
-void MainWindow::cv_saveObjectFromROI()
+void MainWindow::cv_saveImageFromROI()
 {
+    QPushButton *button = (QPushButton*)sender();
     if(cv_image.empty()) {
         M_DEBUG("cv image is empty");
         return;
     }
-    imwrite(ImageProcess::getNode(ImageProcess::PathObjectImageSave), cv_image);
-    QMessageBox::information(this, tr("Object"), tr("save ok"));
-    emit cv_signalShow(true);
-}
+    if(button == m_ui->pushButton_SaveObject) {
+        imwrite(ImageProcess::getNode(ImageProcess::PathObjectSave), cv_image);
+        QMessageBox::information(this, tr("Object"), tr("Save ok"));
+    } else if(button == m_ui->pushButton_SaveBaseArea) {
+        imwrite(ImageProcess::getNode(ImageProcess::PathBaseAreaSave), cv_image);
+        QMessageBox::information(this, tr("Base"), tr("Save ok"));
+    }
 
-void MainWindow::cv_saveHSVBaseFromROI()
-{
-    if(cv_image.empty()) {
-        M_DEBUG("cv image is empty");
-        return;
-    }
-    QMessageBox::information(this, tr("Base"), tr("save ok"));
     emit cv_signalShow(true);
 }
 
@@ -602,15 +599,19 @@ void MainWindow::cv_calib()
 
 void MainWindow::cv_autoRun()
 {
-    Point2f center_img = m_camera.getCenter();
-    Point2f center_real;
+//    Point2f center_img = m_camera.getCenter();
+//    Point2f center_real;
 
-    if(center_img.x == 0 && center_img.y == 0) {
-        return;
-    }
-    ImageProcess::toReal(center_img, center_real);
-    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
-    m_serial->setWidthNPosition(center_real, 2000, 3);
+//    if(center_img.x == 0 && center_img.y == 0) {
+//        return;
+//    }
+//    ImageProcess::toReal(center_img, center_real);
+//    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
+//    m_serial->setWidthNPosition(center_real, 2000, 3);
+    Mat color;
+    Rect roi;
+    m_camera.detectBase(roi, color);
+    cv_debugImage(color);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()

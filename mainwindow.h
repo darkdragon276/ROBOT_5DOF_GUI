@@ -71,8 +71,7 @@ signals:
 private slots:
     // mouse select roi
     void cv_getROI();                       // grab roi mouse released
-    void cv_saveObjectFromROI();            // Button Save Image
-    void cv_saveHSVBaseFromROI();           // Button Save HSV Range
+    void cv_saveImageFromROI();            // Button Save Image
     // timer processing image
     void cv_timeout();                      // Timer 20ms get frame
     // slot with scrollbar

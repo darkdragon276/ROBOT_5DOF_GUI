@@ -24,6 +24,7 @@ vector<Point2f> PointProcess::toVectorPoint2f(vector<Point> _vec_point)
     return _vec_point2f;
 }
 
+// to caculate center of group point
 Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point)
 {
     if(_vec_point.empty()) {
@@ -37,6 +38,7 @@ Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point)
     return Point2f(temp.x / (double)_vec_point.size(), temp.y / (double)_vec_point.size());
 }
 
+// get center and radius of group point
 Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point, double &radius)
 {
     if(_vec_point.empty()) {
@@ -170,45 +172,88 @@ void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max
     Debug::_delete(check, temp_idx);
 }
 
-void PointProcess::setVecPoint(vector<Point2f> _vec_point, PointProcess::Piority_t _level)
+void PointProcess::filledPara(vector<Point2f> contour, PointProcess::Object_t &object)
 {
-    Q_UNUSED(_level);
-    ready_get_flag = false;
-    // push to vec_point
-    // remove first
-    vector<Point2f>::iterator last_idx = vec_point.begin();
-    advance(last_idx, vec_num_point[0]);
-    vec_point.erase(vec_point.begin(), last_idx);
-    // push last
-    vec_point.insert(vec_point.end(), _vec_point.begin(), _vec_point.end());
-    // push to vec_num_point
-    int _size_vec_point = (int)_vec_point.size();
-    for(int i = 0; i < MAX_NUM_SIZE - 1; i++) {
-        vec_num_point[i] = vec_num_point[i+1];
+    if(contour.empty()) {
+        M_DEBUG("contour empty");
+        return;
     }
-    vec_num_point[2] = _size_vec_point;
+    double radius;
+    double angle;
+    // caculate center, radius and angle of countour point.
+    Point2f center = meansVectorPoints(contour, radius);
+
+    // assign to object
+    object.center = center;
+    object.radius_img = radius;
+    object.angle = angle;
+}
+
+void PointProcess::setVecContour(vector<vector<Point> > _vec_contour)
+{
+    ready_get_flag = false;
+    // pop front
+    vector<Object_t>::iterator last_idx = objects_raw.begin();
+    advance(last_idx, object_per_frame[0]);
+    objects_raw.erase(objects_raw.begin(), last_idx);
+
+    // push back
+    Object_t object_temp;
+    vector<Point2f> contour_2f;
+    foreach (vector<Point> contour, _vec_contour) {
+        contour_2f = toVectorPoint2f(contour);
+        filledPara(contour_2f, object_temp);
+        objects_raw.push_back(object_temp);
+    }
+
+    // set index
+    int num_contour = (int)_vec_contour.size();
+    for(int i = 0; i < MAX_NUM_SIZE - 1; i++) {
+        object_per_frame[i] = object_per_frame[i+1];
+    }
+    object_per_frame[MAX_NUM_SIZE - 1] = num_contour;
+
+    Debug::_delete(contour_2f);
     emit signalCluster();
+
 }
 
 void PointProcess::cluster()
 {
-    vector<vector<Point2f>> _group_point;
-    vec_center.clear();
-    hierarchicalClustering(vec_point, ACURACY_GROUP_SIZE, MAX_GROUP_NUM, _group_point);
-    for(size_t i = 0; i < _group_point.size(); i++) {
-        vec_center.push_back(meansVectorPoints(_group_point.at(i)));
+    vector<vector<int>> groups_idx;
+    vector<Point2f> list_center;
+    foreach (Object_t object, objects_raw) {
+        list_center.push_back(object.center);
     }
+    hierarchicalClustering(list_center, ACURACY_GROUP_SIZE, MAX_GROUP_NUM, groups_idx);
+
+    objects_cluster.clear();
+    foreach (vector<int> group_idx, groups_idx) {
+        Object_t object_temp;
+        foreach (int idx, group_idx) {
+            object_temp.angle += objects_raw.at(idx).angle;
+            object_temp.radius_img += objects_raw.at(idx).radius_img;
+            object_temp.center += objects_raw.at(idx).center;
+        }
+        object_temp.angle /= (double)group_idx.size();
+        object_temp.radius_img /= (double)group_idx.size();
+        object_temp.center = Point2f(object_temp.center.x/(double)group_idx.size(),
+                                     object_temp.center.y/(double)group_idx.size());
+        objects_cluster.push_back(object_temp);
+    }
+
     ready_get_flag = true;
-    Debug::_delete(_group_point);
+    Debug::_delete(groups_idx, list_center);
+
 }
 
-bool PointProcess::isReadyGet(vector<Point2f> &_vec_center)
+bool PointProcess::isReadyGet(vector<Object_t> &_vec_object)
 {
     if(ready_get_flag) {
-        if(!_vec_center.empty()) {
-            _vec_center.clear();
+        if(!_vec_object.empty()) {
+            _vec_object.clear();
         }
-        _vec_center.insert(_vec_center.begin(), vec_center.begin(), vec_center.end());
+        _vec_object.insert(_vec_object.begin(), objects_cluster.begin(), objects_cluster.end());
     }
     return ready_get_flag;
 }

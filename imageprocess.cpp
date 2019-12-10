@@ -15,6 +15,7 @@ const char* ImageProcess::NODEPATH[ImageProcess::NumOfMat] = {
     "cameraMatrix.yml",
     "robotMatrix.yml",
     "./images/object.jpg",
+    "./images/base.jpg",
     "dipParameter.yml",
 };
 
@@ -84,10 +85,7 @@ void ImageProcess::getParameterFromFile(double &_alpha, double &_beta, double &_
 Mat ImageProcess::getMatFromQPixmap(QPixmap pixmap)
 {
     QImage qimg = pixmap.toImage().convertToFormat(QImage::Format_RGB888).rgbSwapped();
-    Mat temp = Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
-    uchar* _dealloc = qimg.bits();
-    delete _dealloc;
-    return temp;
+    return Mat(qimg.height(), qimg.width(), CV_8UC3, qimg.bits(), qimg.bytesPerLine()).clone();
 }
 
 bool ImageProcess::undistortImage(Mat grayImage, Mat &undistortImage) {
@@ -239,6 +237,10 @@ void ImageProcess::getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &
                                         vector<Point2f> &keypoint_scene)
 {
     //-- Step 1: Detect the keypoints using SURF Detector, compute the descriptors
+    if(object.empty() || scene.empty()) {
+        M_DEBUG("input empty");
+        return;
+    }
     Mat img_object = object.clone(), img_scene = scene.clone();
     Ptr<SURF> detector = SURF::create( 200.0, 10, 3, false, false );
     vector<KeyPoint> keypoints_object, keypoints_scene;
@@ -447,31 +449,31 @@ void ImageProcess::process()
         return;
     }
 
+    vector<PointProcess::Object_t> vec_objects;
     // basic processing
-    Mat bsp_img = blur_img.clone();
-    basicProcess(bsp_img);
+    Mat basic_img = blur_img.clone();
+    basicProcess(basic_img, vec_objects);
     if(mode == ModeBasicProcessing) {
-        setImage(bsp_img);
-        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, bsp_img);
+        setImage(basic_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, basic_img, vec_objects);
         return;
     }
 
     // suft matching
-    Mat sp_img = blur_img.clone();
-    suftProcess(sp_img);
+    Mat suft_img = blur_img.clone();
+    suftProcess(suft_img, vec_objects);
     if(mode == ModeSUFT) {
-        setImage(sp_img);
-        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, bsp_img, sp_img);
+        setImage(suft_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img, basic_img, suft_img, vec_objects);
         return;
     }
 }
 
-void ImageProcess::basicProcess(Mat &color_img)
+void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects)
 {
     Mat temp_img = color_img.clone();
     Mat gray_img, thresh_img, hsv_img;
     cvtColor(temp_img, gray_img, COLOR_BGR2GRAY);
-//    inRange(hsv_img, hsv_low, hsv_high, gray_img);
     threshold(gray_img, thresh_img, threshbinary, 255, THRESH_BINARY);
     // find contour
     vector<vector<Point>> Shapes;
@@ -479,7 +481,7 @@ void ImageProcess::basicProcess(Mat &color_img)
     vector<Point> approx;
     findContours(thresh_img, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
     for( size_t i = 0; i < contours.size(); i++ ) {
-        approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.1, true);
+        approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.01, true);
         if(fabs(contourArea(approx)) > 2000 && fabs(contourArea(approx)) < 30000 &&
                 isContourConvex(approx)) {
             Shapes.push_back(approx);
@@ -490,39 +492,81 @@ void ImageProcess::basicProcess(Mat &color_img)
         Debug::_delete(Shapes, contours, approx, temp_img, gray_img, thresh_img, hsv_img);
         return;
     }
-    // point processing
-    vector<Point2f> vec_temp;
-    for(size_t i = 0; i < Shapes.size(); i++) {
-        vec_temp.push_back(point_process.meansVectorPoints(
-                                PointProcess::toVectorPoint2f(Shapes.at(i))));
-    }
-    point_process.setVecPoint(vec_temp);
-    while(!point_process.isReadyGet(vec_temp));
-    for(size_t i = 0; i < vec_temp.size(); i++) {
-        circle(color_img, vec_temp.at(i), 2, Scalar(255, 255, 0), 2);
-    }
-    setCenter(vec_temp.at(0));
 
-    Debug::_delete(Shapes, contours, approx, vec_temp, temp_img, hsv_img,
+    // object finding...
+    vec_objects.clear();
+    point_process.setVecContour(Shapes);
+    while(!point_process.isReadyGet(vec_objects));
+
+
+    foreach (PointProcess::Object_t object, vec_objects) {
+        ostringstream strs;
+        strs << (int)object.radius_img;
+        circle(color_img, object.center, 2, Scalar(255, 255, 0), 2);
+        putText(color_img, strs.str(), object.center, FONT_HERSHEY_PLAIN, 2,  Scalar(0,0,255), 2 , 8 , false);
+    }
+
+    Debug::_delete(Shapes, contours, approx, temp_img, hsv_img,
                    gray_img, thresh_img);
 }
 
-void ImageProcess::suftProcess(Mat &color_img)
+void ImageProcess::suftProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects)
 {
-    Mat img_object = imread(getNode(PathObjectImageSave));
-    Mat img_scene = color_img.clone();
-    vector<Point2f> matchObjectPoint;
-    vector<Point2f> matchScenePoint;
-    vector<Point2f> center;
-    vector<vector<int>> groupPoint_idx;
-    try{
+    if(vec_objects.empty()) {
+        M_DEBUG("no object detect");
+        return;
+    }
+
+    Mat img_object = imread(getNode(PathObjectSave));
+    double OBSET = 5;
+    vector<int> erase_idx;
+    for(size_t i = 0; i < vec_objects.size(); i++) {
+        vector<Point2f> matchObjectPoint;
+        vector<Point2f> matchScenePoint;
+        Rect roi = Rect((int)(vec_objects.at(i).center.x - vec_objects.at(i).radius_img - OBSET),
+                        (int)(vec_objects.at(i).center.y - vec_objects.at(i).radius_img - OBSET),
+                        (int)(vec_objects.at(i).radius_img*2 + OBSET),
+                        (int)(vec_objects.at(i).radius_img*2 + OBSET));
+        if(roi.br().x > color_img.cols || roi.br().y > color_img.rows
+                || roi.tl().x < 0 || roi.tl().y < 0) {
+            continue;
+        }
+
+        Mat img_scene = Mat(color_img, roi);
         getMatchesFromObject(img_object, img_scene, matchObjectPoint, matchScenePoint);
-        point_process.hierarchicalClustering(matchScenePoint, 70.0, MAX_GROUP_NUM, groupPoint_idx);
-        homographyTranform(img_object, color_img, matchObjectPoint, matchScenePoint,
-                           groupPoint_idx, center);
-    } catch(const char* msg) {
-        Debug::_delete(img_object, img_scene, matchObjectPoint, matchScenePoint, center,
-                       groupPoint_idx);
+        // don't have key point erase
+        if(matchScenePoint.size() < 5) {
+            erase_idx.push_back(i);
+        }
+    }
+    for(size_t i = 0; i < erase_idx.size(); i++) {
+        vector<PointProcess::Object_t>::iterator vec_objects_idx = vec_objects.begin();
+        advance(vec_objects_idx, erase_idx.at(i) - i);
+        vec_objects.erase(vec_objects_idx);
+    }
+    qDebug() << vec_objects.size();
+
+
+    if(vec_objects.empty()) {
+        M_DEBUG("no object detect");
+        return;
+    }
+    vec_objects.shrink_to_fit();
+    for(size_t i = 0; i < vec_objects.size(); i++){
+        circle(color_img, vec_objects.at(i).center, 3, Scalar(0, 0, 255), 1);
+    }
+    Debug::_delete(img_object);
+}
+
+void ImageProcess::detectBase(Rect &roi, Mat &color_img)
+{
+    Q_UNUSED(color_img);
+    Q_UNUSED(roi);
+    Mat roi_color = imread(getNode(PathBaseAreaSave));
+    if( roi_color.empty() )
+    {
+        M_DEBUG("Base Image empty");
+        return;
     }
 }
 
