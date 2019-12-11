@@ -28,7 +28,7 @@
 #define I_DEBUG(image)      ImageProcess::deBugImage(__FILE__, __LINE__, __FUNCTION__, image)
 #define DIP_CAMERA_FPS      (60.f)
 #define DIP_TIMER_FPS       (1000.f/DIP_CAMERA_FPS)
-#define DIP_MAIN_FPS        (1000.f/10.f)
+#define DIP_MAIN_FPS        (1000.f/.5f)
 
 using namespace cv;
 using namespace cv::xfeatures2d;

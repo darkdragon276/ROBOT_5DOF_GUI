@@ -1,7 +1,7 @@
 %YAML:1.0
 ---
-AlphaParameter: 2.6800000000000002e+00
-BetaParameter: 76.
+AlphaParameter: 3.
+BetaParameter: 65.
 GammaParameter: 1.0100000000000000e+00
 ThreshBinaryParameter: 252.
 HSVMaxParameter: [ 179., 255., 255., 0. ]

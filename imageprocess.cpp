@@ -481,6 +481,7 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
     vector<Point> approx;
     findContours(thresh_img, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
     for( size_t i = 0; i < contours.size(); i++ ) {
+        approx.clear();
         approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.01, true);
         if(fabs(contourArea(approx)) > 2000 && fabs(contourArea(approx)) < 30000 &&
                 isContourConvex(approx)) {
@@ -495,7 +496,8 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
 
     // object finding...
     vec_objects.clear();
-    point_process.setVecContour(Shapes);
+    point_process.setVecContour(Shapes, color_img);
+//    return;
     while(!point_process.isReadyGet(vec_objects));
 
 
