@@ -516,6 +516,7 @@ void MainWindow::cv_saveImageFromROI()
         QMessageBox::information(this, tr("Object"), tr("Save ok"));
     } else if(button == m_ui->pushButton_SaveBaseArea) {
         imwrite(ImageProcess::getNode(ImageProcess::PathBaseAreaSave), cv_image);
+        emit m_camera.signalSetBase();
         QMessageBox::information(this, tr("Base"), tr("Save ok"));
     }
 
@@ -608,10 +609,6 @@ void MainWindow::cv_autoRun()
 //    ImageProcess::toReal(center_img, center_real);
 //    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
 //    m_serial->setWidthNPosition(center_real, 2000, 3);
-    Mat color;
-    Rect roi;
-    m_camera.detectBase(roi, color);
-    cv_debugImage(color);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()

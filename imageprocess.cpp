@@ -34,6 +34,7 @@ void ImageProcess::init()
     _timer_release_buffer = new QTimer(this);
     QObject::connect(_timer_release_buffer, &QTimer::timeout, this, &ImageProcess::_grabImage);
     _timer_release_buffer->start(DIP_TIMER_FPS);
+    QObject::connect(this, &ImageProcess::signalSetBase, this, &ImageProcess::setBase);
 }
 
 void ImageProcess::denit()
@@ -449,8 +450,17 @@ void ImageProcess::process()
         return;
     }
 
-    vector<PointProcess::Object_t> vec_objects;
+    // init Base
+    if(process_num != 0) {
+        process_num --;
+        initBase();
+    }
+    // remove base mask
+    Mat disbase_img, detect_img = blur_img.clone();
+    andBaseMask(detect_img, disbase_img);
+
     // basic processing
+    vector<PointProcess::Object_t> vec_objects;
     Mat basic_img = blur_img.clone();
     basicProcess(basic_img, vec_objects);
     if(mode == ModeBasicProcessing) {
@@ -476,7 +486,7 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
     cvtColor(temp_img, gray_img, COLOR_BGR2GRAY);
     threshold(gray_img, thresh_img, threshbinary, 255, THRESH_BINARY);
     // find contour
-    vector<vector<Point>> Shapes;
+    vector<vector<Point>> object_contours;
     vector<vector<Point>> contours;
     vector<Point> approx;
     findContours(thresh_img, contours, RETR_LIST, CHAIN_APPROX_SIMPLE);
@@ -485,22 +495,20 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
         approxPolyDP(contours[i], approx, arcLength(contours[i], true)*0.01, true);
         if(fabs(contourArea(approx)) > 2000 && fabs(contourArea(approx)) < 30000 &&
                 isContourConvex(approx)) {
-            Shapes.push_back(approx);
+            object_contours.push_back(approx);
         }
     }
-    if(Shapes.empty()) {
+    if(object_contours.empty()) {
         M_DEBUG("shape empty");
-        Debug::_delete(Shapes, contours, approx, temp_img, gray_img, thresh_img, hsv_img);
+        Debug::_delete(object_contours, contours, approx, temp_img, gray_img, thresh_img, hsv_img);
         return;
     }
 
     // object finding...
     vec_objects.clear();
-    point_process.setVecContour(Shapes, color_img);
-//    return;
+    point_process.setVecContour(object_contours, color_img);
+    return;
     while(!point_process.isReadyGet(vec_objects));
-
-
     foreach (PointProcess::Object_t object, vec_objects) {
         ostringstream strs;
         strs << (int)object.radius_img;
@@ -508,7 +516,7 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
         putText(color_img, strs.str(), object.center, FONT_HERSHEY_PLAIN, 2,  Scalar(0,0,255), 2 , 8 , false);
     }
 
-    Debug::_delete(Shapes, contours, approx, temp_img, hsv_img,
+    Debug::_delete(object_contours, contours, approx, temp_img, hsv_img,
                    gray_img, thresh_img);
 }
 
@@ -560,16 +568,35 @@ void ImageProcess::suftProcess(Mat &color_img, vector<PointProcess::Object_t> &v
     Debug::_delete(img_object);
 }
 
-void ImageProcess::detectBase(Rect &roi, Mat &color_img)
+void ImageProcess::andBaseMask(Mat color_img, Mat& remove_base_img)
 {
-    Q_UNUSED(color_img);
-    Q_UNUSED(roi);
-    Mat roi_color = imread(getNode(PathBaseAreaSave));
-    if( roi_color.empty() )
-    {
-        M_DEBUG("Base Image empty");
+    Mat base_img = imread(getNode(PathBaseAreaSave));
+    if(base_img.empty() || color_img.empty()) {
+        M_DEBUG("Base Image or Input Image empty");
         return;
     }
+    //    Mat base_hsv, hsv_img;
+    //    cvtColor(base_img, base_hsv, COLOR_BGR2HSV);
+    //    cvtColor(color_img, hsv_img, COLOR_BGR2HSV);
+
+    int OBSET = 50;
+    Scalar rgb_base_mean = mean(base_img);
+    Scalar rgb_low = Scalar(OBSET, OBSET, OBSET, 0);
+    Scalar rgb_high = Scalar(OBSET, OBSET, OBSET, 255);
+    Mat rgb_mask, rgb_dilate, rgb_erode, rgb_blur, rgb_thresh;
+    inRange(color_img, rgb_base_mean - rgb_low, rgb_base_mean + rgb_high, rgb_mask);
+
+    // remove some tiny hole
+    int dilation_size = 11;
+    Mat element = getStructuringElement(MORPH_ELLIPSE, Size(dilation_size, dilation_size));
+    dilate(rgb_mask, rgb_dilate, element);
+    blur(rgb_dilate, rgb_blur, Size(5, 5));
+    threshold(rgb_blur, rgb_thresh, 100, 255, THRESH_BINARY);
+    erode(rgb_thresh, rgb_erode, element);
+
+    I_DEBUG(rgb_erode);
+    M_DEBUG(rgb_base_mean);
+
 }
 
 void ImageProcess::setCenter(Point2f _center)
@@ -579,4 +606,9 @@ void ImageProcess::setCenter(Point2f _center)
 
 Point2f ImageProcess::getCenter() {
     return center;
+}
+
+void ImageProcess::setBase()
+{
+    process_num = MAX_PROCESS_NUM;
 }

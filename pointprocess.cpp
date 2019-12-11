@@ -206,7 +206,7 @@ double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
     //Perform PCA analysis
     PCA pca_analysis(data_vec_contour, Mat(), PCA::DATA_AS_ROW);
     //Store the center of the object
-    Point cntr = Point(static_cast<int>(pca_analysis.mean.at<double>(0, 0)),
+    Point center = Point(static_cast<int>(pca_analysis.mean.at<double>(0, 0)),
                        static_cast<int>(pca_analysis.mean.at<double>(0, 1)));
 
     //Store the eigenvalues and eigenvectors
@@ -218,13 +218,9 @@ double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
         eigen_val[i] = pca_analysis.eigenvalues.at<double>(i);
     }
     // Draw the principal components
-    circle(color_img, cntr, 3, Scalar(255, 0, 255), 2);
-    Point p1 = cntr + 0.02 * Point(static_cast<int>(eigen_vecs[0].x * eigen_val[0]),
-                                   static_cast<int>(eigen_vecs[0].y * eigen_val[0]));
-    Point p2 = cntr - 0.02 * Point(static_cast<int>(eigen_vecs[1].x * eigen_val[1]),
-                                   static_cast<int>(eigen_vecs[1].y * eigen_val[1]));
-    drawAxis(color_img, cntr, p1, Scalar(0, 255, 0), 1);
-    drawAxis(color_img, cntr, p2, Scalar(255, 255, 0), 5);
+    circle(color_img, center, 3, CV_RGB(255, 0, 255), 2);
+    line(color_img, center, center + 0.02 * Point(eigen_vecs[0].x * eigen_val[0], eigen_vecs[0].y * eigen_val[0]) , CV_RGB(0, 255, 0));
+    line(color_img, center, center + 0.02 * Point(eigen_vecs[1].x * eigen_val[1], eigen_vecs[1].y * eigen_val[1]) , CV_RGB(0, 255, 255));
     double angle = atan2(eigen_vecs[0].y, eigen_vecs[0].x)*180.0/CV_PI; // orientation in radians
     return angle;
 }
@@ -239,13 +235,13 @@ void PointProcess::filledPara(vector<Point2f> contour, PointProcess::Object_t &o
     double radius;
     // caculate center, radius and angle of countour point.
     Point2f center = meansVectorPoints(contour, radius);
-//    qDebug() <<"raw" << radius;
-//    double angle = getAngle(contour, color_image);
+    double angle = getAngle(contour, color_image);
+    //    qDebug() <<"raw" << radius;
 
     // assign to object
     object.center = center;
-    object.radius_img = radius_filter.updateEstimate(radius);
-//    object.angle = angle_filter.updateEstimate(angle);
+    object.radius_img = radius;
+    object.angle = angle;
 }
 
 void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color_image)
@@ -257,13 +253,13 @@ void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color
     objects_raw.erase(objects_raw.begin(), last_idx);
 
     // push back
-    Object_t object_temp;
+    Object_t object_temp = {Point2f(0, 0), 0, 0};
     vector<Point2f> contour_2f;
     foreach (vector<Point> contour, _vec_contour) {
         contour_2f = toVectorPoint2f(contour);
         filledPara(contour_2f, object_temp, color_image);
         objects_raw.push_back(object_temp);
-//        qDebug() <<"filter" << object_temp.radius_img;
+        //      qDebug() <<"filter" << object_temp.radius_img;
     }
     // set index
     int num_contour = (int)_vec_contour.size();
@@ -298,7 +294,7 @@ void PointProcess::cluster()
         object_temp.radius_img /= (double)group_idx.size();
         object_temp.center = Point2f(object_temp.center.x/(double)group_idx.size(),
                                      object_temp.center.y/(double)group_idx.size());
-//        qDebug() <<"cluster" << object_temp.radius_img;
+        //        qDebug() <<"cluster" << object_temp.radius_img;
         objects_cluster.push_back(object_temp);
     }
 

@@ -39,3 +39,10 @@ void Debug::deBug(string file, int line, string function, Point2f _point)
     qDebug().noquote() << oss.str().c_str();
 }
 
+void Debug::deBug(string file, int line, string function, Scalar _scalar)
+{
+    ostringstream oss;
+    oss << file << "(" << line << ")" << "/" << function << ":" << _scalar << endl;
+    qDebug().noquote() << oss.str().c_str();
+}
+

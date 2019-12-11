@@ -25,10 +25,10 @@
 #include "pointprocess.h"
 #include "debug.h"
 
-#define I_DEBUG(image)      ImageProcess::deBugImage(__FILE__, __LINE__, __FUNCTION__, image)
+#define I_DEBUG(image)      ImageProcess::deBugImage(image)
 #define DIP_CAMERA_FPS      (60.f)
 #define DIP_TIMER_FPS       (1000.f/DIP_CAMERA_FPS)
-#define DIP_MAIN_FPS        (1000.f/.5f)
+#define DIP_MAIN_FPS        (1000.f/60.f)
 
 using namespace cv;
 using namespace cv::xfeatures2d;
@@ -112,9 +112,12 @@ public: // non static function => must call object
     void process();
     void basicProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
     void suftProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
-    void detectBase(Rect& roi, Mat &color_img);
+    void andBaseMask(Mat color_img, Mat &remove_base_img);
     void setCenter(Point2f _center);
     Point2f getCenter();
+
+    // base process
+    void setBase();
 
 private:
 
@@ -126,6 +129,13 @@ private:
     PointProcess point_process;
     static const int MAX_GROUP_NUM = 10;
     Point2f center;
+
+    // base process
+    static const int MAX_PROCESS_NUM = 10;
+    int process_num = 0;
+
+signals:
+    void signalSetBase();
 };
 
 #endif // IMAGEPROCESS_H

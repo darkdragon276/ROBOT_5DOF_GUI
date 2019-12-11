@@ -9,9 +9,8 @@
 #include <QTimer>
 
 #include "debug.h"
-#include "simplekalmanfilter.h"
-using namespace cv;
 
+using namespace cv;
 class PointProcess: public QObject
 {
     Q_OBJECT
@@ -59,10 +58,6 @@ private:
     vector<Object_t> objects_raw, objects_cluster;
     int object_per_frame[MAX_NUM_SIZE] = {0};
     bool ready_get_flag = false;
-
-    // kalman filter
-    SimpleKalmanFilter angle_filter, radius_filter;
-
 };
 
 #endif // POINTPROCESS_H
