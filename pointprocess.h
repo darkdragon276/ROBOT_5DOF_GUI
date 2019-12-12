@@ -9,6 +9,7 @@
 #include <QTimer>
 
 #include "debug.h"
+//#define OBJECT_ANGLE
 
 using namespace cv;
 class PointProcess: public QObject
@@ -27,7 +28,6 @@ public:
         Point2f center;
         double radius_img;
         double angle;
-//        vector<Point2f> contour;
     } Object_t;
 
     static vector<Point2f> toVectorPoint2f(vector<Point> _vec_point);
@@ -40,7 +40,6 @@ public:
                                 vector<vector<Point2f>> &group_point);
     void hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                 int max_group, vector<vector<int> > &pointInGroup_idx);
-    void drawAxis(Mat& img, Point p, Point q, Scalar colour, const float scale = 0.2);
     double getAngle(vector<Point2f> vec_contour, Mat &color_img);
     void filledPara(vector<Point2f> contour, Object_t &object, Mat &color_image);
     // process method for vector<contour>

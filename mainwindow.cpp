@@ -516,7 +516,7 @@ void MainWindow::cv_saveImageFromROI()
         QMessageBox::information(this, tr("Object"), tr("Save ok"));
     } else if(button == m_ui->pushButton_SaveBaseArea) {
         imwrite(ImageProcess::getNode(ImageProcess::PathBaseAreaSave), cv_image);
-        emit m_camera.signalSetBase();
+        m_camera.setBase();
         QMessageBox::information(this, tr("Base"), tr("Save ok"));
     }
 
@@ -600,15 +600,19 @@ void MainWindow::cv_calib()
 
 void MainWindow::cv_autoRun()
 {
-//    Point2f center_img = m_camera.getCenter();
-//    Point2f center_real;
-
-//    if(center_img.x == 0 && center_img.y == 0) {
-//        return;
-//    }
-//    ImageProcess::toReal(center_img, center_real);
+    PointProcess::Object_t object;
+    m_camera.getObject(object, 0);
+    if((object.center.x == 0 && object.center.y == 0) || object.radius_img == 0) {
+        M_DEBUG("error radius or center is zero");
+        return;
+    }
+    Point2f real_center, real_base;
+    double real_width;
+    ImageProcess::toReal(object.center, real_center);
+    ImageProcess::toReal(object.radius_img, real_width);
+    ImageProcess::toReal(m_camera.getBaseCenter(), real_base);
 //    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
-//    m_serial->setWidthNPosition(center_real, 2000, 3);
+    m_serial->setWidthNPosition(real_center, 2000, real_width*2.0/10.0, real_base);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()
@@ -622,6 +626,7 @@ void MainWindow::on_pushButton_Camera_Connect_clicked()
 
 void MainWindow::on_pushButton_ShowCamera_clicked()
 {
+    m_camera.setMode(ImageProcess::ModeNull);
     emit cv_signalShow(true);
 }
 

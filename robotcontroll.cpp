@@ -200,19 +200,19 @@ bool RobotControll::isTimeOut()
     return istimeout;
 }
 
-void RobotControll::setWidthNPosition(Point2f pos, int time, double Width)
+void RobotControll::setWidthNPosition(Point2f pos, int time, double width, Point2f base_center)
 {
-    const QString para_poswidmax = tr("%1 %2 %3 1.0").arg(Width+1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
-    const QString para_poswidmin = tr("%1 %2 %3 1.0").arg(Width-1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
+    const QString para_poswidmax = tr("%1 %2 %3 1.0").arg(width+1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
+    const QString para_poswidmin = tr("%1 %2 %3 1.0").arg(width-1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
     const QString para_time = tr("%1").arg(time);
-    const QString para_posbase = tr("%1 %2 1.0").arg(20.0).arg(20.0);
-    const QString para_widbase = tr("%1").arg(Width+1);
+    const QString para_posbase = tr("%1 %2 1.0").arg(-base_center.x/10+1).arg(base_center.y/10+0.5);
+    const QString para_poswidbase = tr("%1 %2 %3 1.0").arg(width+1).arg(-base_center.x/10+1).arg(base_center.y/10+0.5);
 
     setCommandNWait(SetTime, para_time);
     setCommandNWait(SetWidPos, para_poswidmax);
     setCommandNWait(SetWidPos, para_poswidmin);
     setCommandNWait(SetHome);
     setCommandNWait(SetPosition, para_posbase);
-    setCommandNWait(SetWidth, para_widbase);
+    setCommandNWait(SetWidPos, para_poswidbase);
     setCommandNWait(SetHome);
 }

@@ -172,23 +172,6 @@ void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max
     Debug::_delete(check, temp_idx);
 }
 
-void PointProcess::drawAxis(Mat& img, Point p, Point q, Scalar colour, const float scale)
-{
-    double angle = atan2( (double) p.y - q.y, (double) p.x - q.x ); // angle in radians
-    double hypotenuse = sqrt( (double) (p.y - q.y) * (p.y - q.y) + (p.x - q.x) * (p.x - q.x));
-    // Here we lengthen the arrow by a factor of scale
-    q.x = (int) (p.x - scale * hypotenuse * cos(angle));
-    q.y = (int) (p.y - scale * hypotenuse * sin(angle));
-    line(img, p, q, colour, 1, LINE_AA);
-    // create the arrow hooks
-    p.x = (int) (q.x + 9 * cos(angle + CV_PI / 4));
-    p.y = (int) (q.y + 9 * sin(angle + CV_PI / 4));
-    line(img, p, q, colour, 1, LINE_AA);
-    p.x = (int) (q.x + 9 * cos(angle - CV_PI / 4));
-    p.y = (int) (q.y + 9 * sin(angle - CV_PI / 4));
-    line(img, p, q, colour, 1, LINE_AA);
-}
-
 double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
 {
     if(vec_contour.empty()) {
@@ -207,7 +190,7 @@ double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
     PCA pca_analysis(data_vec_contour, Mat(), PCA::DATA_AS_ROW);
     //Store the center of the object
     Point center = Point(static_cast<int>(pca_analysis.mean.at<double>(0, 0)),
-                       static_cast<int>(pca_analysis.mean.at<double>(0, 1)));
+                         static_cast<int>(pca_analysis.mean.at<double>(0, 1)));
 
     //Store the eigenvalues and eigenvectors
     vector<Point2d> eigen_vecs(2);
@@ -219,9 +202,12 @@ double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
     }
     // Draw the principal components
     circle(color_img, center, 3, CV_RGB(255, 0, 255), 2);
-    line(color_img, center, center + 0.02 * Point(eigen_vecs[0].x * eigen_val[0], eigen_vecs[0].y * eigen_val[0]) , CV_RGB(0, 255, 0));
-    line(color_img, center, center + 0.02 * Point(eigen_vecs[1].x * eigen_val[1], eigen_vecs[1].y * eigen_val[1]) , CV_RGB(0, 255, 255));
-    double angle = atan2(eigen_vecs[0].y, eigen_vecs[0].x)*180.0/CV_PI; // orientation in radians
+    line(color_img, center, center + 0.02 * Point(eigen_vecs[0].x * eigen_val[0],
+         eigen_vecs[0].y * eigen_val[0]) , CV_RGB(0, 255, 0));
+    line(color_img, center, center + 0.02 * Point(eigen_vecs[1].x * eigen_val[1],
+         eigen_vecs[1].y * eigen_val[1]) , CV_RGB(0, 255, 255));
+    // orientation in degree
+    double angle = atan2(eigen_vecs[0].y, eigen_vecs[0].x)*180.0/CV_PI;
     return angle;
 }
 
@@ -235,13 +221,15 @@ void PointProcess::filledPara(vector<Point2f> contour, PointProcess::Object_t &o
     double radius;
     // caculate center, radius and angle of countour point.
     Point2f center = meansVectorPoints(contour, radius);
-    double angle = getAngle(contour, color_image);
     //    qDebug() <<"raw" << radius;
 
     // assign to object
     object.center = center;
     object.radius_img = radius;
+#ifdef OBJECT_ANGLE
+    double angle = getAngle(contour, color_image);
     object.angle = angle;
+#endif
 }
 
 void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color_image)

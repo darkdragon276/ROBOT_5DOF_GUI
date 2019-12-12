@@ -108,16 +108,19 @@ public: // non static function => must call object
     void setParameterIntoFile();
     Mat getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
     void setMode(processMode_t _mode);
+    void setVecObjects(vector<PointProcess::Object_t> vec_objects);
+    void getObject(PointProcess::Object_t& _object, int index);
 
+    // loop processing
     void process();
     void basicProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
     void suftProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
-    void andBaseMask(Mat color_img, Mat &remove_base_img);
-    void setCenter(Point2f _center);
-    Point2f getCenter();
 
     // base process
+    void initBase(Mat rgb_img);
     void setBase();
+    Point2f getBaseCenter();
+
 
 private:
 
@@ -127,15 +130,13 @@ private:
     processMode_t mode = ModeNull;
     QTimer *_timer_release_buffer;
     PointProcess point_process;
-    static const int MAX_GROUP_NUM = 10;
-    Point2f center;
+    vector<PointProcess::Object_t> objects_detected;
 
     // base process
-    static const int MAX_PROCESS_NUM = 10;
-    int process_num = 0;
-
-signals:
-    void signalSetBase();
+    static const int MAX_PROCESS_NUM = 60;
+    int process_num = MAX_PROCESS_NUM;
+    Mat base_mask;
+    Point2f base_center;
 };
 
 #endif // IMAGEPROCESS_H
