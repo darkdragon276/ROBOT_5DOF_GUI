@@ -27,6 +27,7 @@ public:
     static void deBug(string file, int line, string function, Mat _mat);
     static void deBug(string file, int line, string function, Point2f _point);
     static void deBug(string file, int line, string function, Scalar _scalar);
+    static void deBug(string file, int line, string function, QString message);
     //  QElapsedTimer _timer;
     //  _timer.start();
     //  qDebug() << "Time took" << _timer.elapsed() << "milliseconds";

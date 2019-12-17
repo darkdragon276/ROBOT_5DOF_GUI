@@ -242,7 +242,7 @@ void ImageProcess::getMatchesFromObject(Mat object, Mat scene, vector<Point2f> &
         return;
     }
     Mat img_object = object.clone(), img_scene = scene.clone();
-    Ptr<SURF> detector = SURF::create( 200.0, 10, 3, false, false );
+    Ptr<SURF> detector = SURF::create( 100.0, 20, 3, false, false );
     vector<KeyPoint> keypoints_object, keypoints_scene;
     Mat descriptors_object, descriptors_scene;
     detector->detectAndCompute( img_object, noArray(), keypoints_object, descriptors_object );
@@ -296,7 +296,7 @@ void ImageProcess::homographyTranform(Mat imgObject, Mat imgScene, vector<Point2
             M_DEBUG("H empty");
         } else {
             perspectiveTransform(centerObject, centerScene, H);
-            _vec_center.push_back(PointProcess::meansVectorPoints(centerScene));
+            _vec_center.push_back(Filter::meansVectorPoints(centerScene));
             circle(imgScene, _vec_center.back(), 3, Scalar(255, 0, 255), 3);
             M_DEBUG(_vec_center.back());
             M_DEBUG("well");
@@ -431,19 +431,29 @@ void ImageProcess::setMode(ImageProcess::processMode_t _mode)
     mode = _mode;
 }
 
-void ImageProcess::setVecObjects(vector<PointProcess::Object_t> vec_objects)
+void ImageProcess::setVecObjects(vector<Filter::Object_t> vec_objects)
 {
     objects_detected.clear();
+    if(vec_objects.empty()) {
+        M_DEBUG("vec_object input is zero");
+        return;
+    }
     objects_detected = vec_objects;
 }
 
-void ImageProcess::getObject(PointProcess::Object_t& _object, int index)
+bool ImageProcess::getObject(Filter::Object_t& _object, int index)
 {
+    if(objects_detected.empty()) {
+        M_DEBUG("no object detect");
+        return false;
+    }
     if(index >= (int)objects_detected.size()) {
         M_DEBUG("index larger than object num");
-        return;
+        return false;
     }
+    _object = {Point2f(0, 0), 0, 0};
     _object = objects_detected.at(index);
+    return true;
 }
 
 void ImageProcess::process()
@@ -476,7 +486,8 @@ void ImageProcess::process()
     bitwise_or(color_temp, blur_img, bitwise_img);
 
     // basic processing
-    vector<PointProcess::Object_t> vec_objects;
+    vector<Filter::Object_t> vec_objects;
+    vec_objects.clear();
     Mat basic_img = bitwise_img.clone();
     basicProcess(basic_img, vec_objects);
     if(mode == ModeBasicProcessing) {
@@ -499,7 +510,7 @@ void ImageProcess::process()
     }
 }
 
-void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects)
+void ImageProcess::basicProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects)
 {
     Mat temp_img = color_img.clone();
     Mat gray_img, thresh_img, hsv_img;
@@ -526,9 +537,9 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
 
     // object finding...
     vec_objects.clear();
-    point_process.setVecContour(object_contours, color_img);
-    while(!point_process.isReadyGet(vec_objects));
-    foreach (PointProcess::Object_t object, vec_objects) {
+    contour_filter.setVecContour(object_contours);
+    while(!contour_filter.isReadyGet(vec_objects));
+    foreach (Filter::Object_t object, vec_objects) {
         ostringstream strs;
         strs << (int)object.radius_img;
         circle(color_img, object.center, 2, Scalar(255, 255, 0), 2);
@@ -539,7 +550,7 @@ void ImageProcess::basicProcess(Mat &color_img, vector<PointProcess::Object_t> &
                    gray_img, thresh_img);
 }
 
-void ImageProcess::suftProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects)
+void ImageProcess::suftProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects)
 {
     if(vec_objects.empty()) {
         M_DEBUG("no object detect");
@@ -547,15 +558,14 @@ void ImageProcess::suftProcess(Mat &color_img, vector<PointProcess::Object_t> &v
     }
 
     Mat img_object = imread(getNode(PathObjectSave));
-    double OBSET = 5;
     vector<int> erase_idx;
     for(size_t i = 0; i < vec_objects.size(); i++) {
         vector<Point2f> matchObjectPoint;
         vector<Point2f> matchScenePoint;
-        Rect roi = Rect((int)(vec_objects.at(i).center.x - vec_objects.at(i).radius_img - OBSET),
-                        (int)(vec_objects.at(i).center.y - vec_objects.at(i).radius_img - OBSET),
-                        (int)(vec_objects.at(i).radius_img*2 + OBSET),
-                        (int)(vec_objects.at(i).radius_img*2 + OBSET));
+        Rect roi = Rect((int)(vec_objects.at(i).center.x - vec_objects.at(i).radius_img - OBSET_SUFT_ROI),
+                        (int)(vec_objects.at(i).center.y - vec_objects.at(i).radius_img - OBSET_SUFT_ROI),
+                        (int)(vec_objects.at(i).radius_img*2 + OBSET_SUFT_ROI),
+                        (int)(vec_objects.at(i).radius_img*2 + OBSET_SUFT_ROI));
         if(roi.br().x > color_img.cols || roi.br().y > color_img.rows
                 || roi.tl().x < 0 || roi.tl().y < 0) {
             continue;
@@ -569,20 +579,19 @@ void ImageProcess::suftProcess(Mat &color_img, vector<PointProcess::Object_t> &v
         }
     }
     for(size_t i = 0; i < erase_idx.size(); i++) {
-        vector<PointProcess::Object_t>::iterator vec_objects_idx = vec_objects.begin();
+        vector<Filter::Object_t>::iterator vec_objects_idx = vec_objects.begin();
         advance(vec_objects_idx, erase_idx.at(i) - i);
         vec_objects.erase(vec_objects_idx);
     }
-    qDebug() << vec_objects.size();
-
 
     if(vec_objects.empty()) {
         M_DEBUG("no object detect");
-        return;
     }
     vec_objects.shrink_to_fit();
+    suft_filter.setVecObject(vec_objects);
+    while(!suft_filter.isReadyGet(vec_objects));
     for(size_t i = 0; i < vec_objects.size(); i++){
-        circle(color_img, vec_objects.at(i).center, 3, Scalar(0, 0, 255), 1);
+        circle(color_img, vec_objects.at(i).center, 3, Scalar(0, 0, 255), 3);
     }
     Debug::_delete(img_object);
 }
@@ -600,10 +609,9 @@ void ImageProcess::initBase(Mat rgb_img)
         return;
     }
 
-    int OBSET = 50;
     Scalar rgb_base_mean = mean(base_img);
-    Scalar rgb_low = Scalar(OBSET, OBSET, OBSET, 0);
-    Scalar rgb_high = Scalar(OBSET, OBSET, OBSET, 255);
+    Scalar rgb_low = Scalar(OBSET_RANGE_RGB, OBSET_RANGE_RGB, OBSET_RANGE_RGB, 0);
+    Scalar rgb_high = Scalar(OBSET_RANGE_RGB, OBSET_RANGE_RGB, OBSET_RANGE_RGB, 255);
     Mat rgb_mask, rgb_dilate, rgb_erode, rgb_blur, rgb_thresh;
     inRange(rgb_img, rgb_base_mean - rgb_low, rgb_base_mean + rgb_high, rgb_mask);
 
@@ -642,10 +650,10 @@ void ImageProcess::initBase(Mat rgb_img)
             }
         }
         if(base_contours.size() != 1) {
-            qDebug() << tr("over than 1 base: %1").arg(base_contours.size());
+            M_DEBUG(tr("over than 1 base: %1").arg(base_contours.size()));
             return;
         }
-        base_center = PointProcess::meansVectorPoints(PointProcess::toVectorPoint2f(base_contours.at(0)));
+        base_center = Filter::meansVectorPoints(Filter::toVectorPoint2f(base_contours.at(0)));
     }
 }
 

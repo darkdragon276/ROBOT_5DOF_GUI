@@ -1,17 +1,17 @@
-#include "pointprocess.h"
+#include "filter.h"
 
-PointProcess::PointProcess(QObject *parent)
+Filter::Filter(QObject *parent)
 {
     Q_UNUSED(parent);
-    QObject::connect(this, &PointProcess::signalCluster, this, &PointProcess::cluster);
+    QObject::connect(this, &Filter::signalCluster, this, &Filter::cluster);
 }
 
-PointProcess::~PointProcess()
+Filter::~Filter()
 {
 
 }
 
-vector<Point2f> PointProcess::toVectorPoint2f(vector<Point> _vec_point)
+vector<Point2f> Filter::toVectorPoint2f(vector<Point> _vec_point)
 {
     vector<Point2f> _vec_point2f;
     if(_vec_point.empty()) {
@@ -25,7 +25,7 @@ vector<Point2f> PointProcess::toVectorPoint2f(vector<Point> _vec_point)
 }
 
 // to caculate center of group point
-Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point)
+Point2f Filter::meansVectorPoints(vector<Point2f> _vec_point)
 {
     if(_vec_point.empty()) {
         M_DEBUG("vector<Point> empty");
@@ -39,7 +39,7 @@ Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point)
 }
 
 // get center and radius of group point
-Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point, double &radius)
+Point2f Filter::meansVectorPoints(vector<Point2f> _vec_point, double &radius)
 {
     if(_vec_point.empty()) {
         M_DEBUG("vector<Point> empty");
@@ -60,7 +60,7 @@ Point2f PointProcess::meansVectorPoints(vector<Point2f> _vec_point, double &radi
     return means;
 }
 
-void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
+void Filter::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                           int max_group, vector<vector<Point2f>> &group_point) {
     if(point_list.empty()) {
         M_DEBUG("error empty input");
@@ -98,7 +98,7 @@ void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max
     Debug::_delete(check, temp);
 }
 
-void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
+void Filter::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                           vector<Point2f> ref_list, int max_group,
                                           vector<vector<Point2f>> &group_point)
 {
@@ -133,7 +133,7 @@ void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max
     Debug::_delete(check, temp);
 }
 
-void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
+void Filter::hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                           int max_group, vector<vector<int>> &pointInGroup_idx) {
     if(point_list.empty()) {
         M_DEBUG("error empty input");
@@ -172,7 +172,7 @@ void PointProcess::hierarchicalClustering(vector<Point2f> point_list, double max
     Debug::_delete(check, temp_idx);
 }
 
-double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
+double Filter::getAngle(vector<Point2f> vec_contour, Mat &color_img)
 {
     if(vec_contour.empty()) {
         M_DEBUG("vector contour is empty");
@@ -211,9 +211,9 @@ double PointProcess::getAngle(vector<Point2f> vec_contour, Mat &color_img)
     return angle;
 }
 
-void PointProcess::filledPara(vector<Point2f> contour, PointProcess::Object_t &object,
-                              Mat &color_image)
+void Filter::filledPara(vector<Point2f> contour, Filter::Object_t &object)
 {
+
     if(contour.empty()) {
         M_DEBUG("contour empty");
         return;
@@ -232,7 +232,23 @@ void PointProcess::filledPara(vector<Point2f> contour, PointProcess::Object_t &o
 #endif
 }
 
-void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color_image)
+void Filter::contour2Object(vector<Point2f> contour, Filter::Object_t &object)
+{
+    if(contour.empty()) {
+        M_DEBUG("contour empty");
+        return;
+    }
+    double radius;
+    // caculate center, radius and angle of countour point.
+    Point2f center = meansVectorPoints(contour, radius);
+
+    // assign to object
+    object.center = center;
+    object.radius_img = radius;
+    object.angle = 0;
+}
+
+void Filter::setVecContour(vector<vector<Point> > _vec_contour)
 {
     ready_get_flag = false;
     // pop front
@@ -245,7 +261,7 @@ void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color
     vector<Point2f> contour_2f;
     foreach (vector<Point> contour, _vec_contour) {
         contour_2f = toVectorPoint2f(contour);
-        filledPara(contour_2f, object_temp, color_image);
+        filledPara(contour_2f, object_temp);
         objects_raw.push_back(object_temp);
         //      qDebug() <<"filter" << object_temp.radius_img;
     }
@@ -261,7 +277,30 @@ void PointProcess::setVecContour(vector<vector<Point> > _vec_contour, Mat& color
 
 }
 
-void PointProcess::cluster()
+void Filter::setVecObject(vector<Filter::Object_t> _vec_object)
+{
+    ready_get_flag = false;
+    // pop front
+    vector<Object_t>::iterator last_idx = objects_raw.begin();
+    advance(last_idx, object_per_frame[0]);
+    objects_raw.erase(objects_raw.begin(), last_idx);
+
+    // push back
+    foreach (Object_t object, _vec_object) {
+        objects_raw.push_back(object);
+    }
+
+    // set index
+    int num_contour = (int)_vec_object.size();
+    for(int i = 0; i < MAX_NUM_SIZE - 1; i++) {
+        object_per_frame[i] = object_per_frame[i+1];
+    }
+    object_per_frame[MAX_NUM_SIZE - 1] = num_contour;
+
+    emit signalCluster();
+}
+
+void Filter::cluster()
 {
     vector<vector<int>> groups_idx;
     vector<Point2f> list_center;
@@ -291,7 +330,7 @@ void PointProcess::cluster()
 
 }
 
-bool PointProcess::isReadyGet(vector<Object_t> &_vec_object)
+bool Filter::isReadyGet(vector<Object_t> &_vec_object)
 {
     if(ready_get_flag) {
         if(!_vec_object.empty()) {

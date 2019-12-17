@@ -82,6 +82,7 @@ private slots:
     void cv_show(bool dynamic = false);
     void cv_calib();                        // Button calib
     void cv_autoRun();                      // Button AutoRun
+    void autoGrabObject();                  // Timer auto run
 
     // pushbutton slot
     void on_pushButton_Camera_Connect_clicked();
@@ -104,6 +105,8 @@ private:
     ImageProcess m_camera;
     QTimer *timer_imgproc = nullptr;
     Mat cv_image;
+
+    QTimer *auto_run_timer = nullptr;
 
 
 };

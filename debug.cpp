@@ -46,3 +46,10 @@ void Debug::deBug(string file, int line, string function, Scalar _scalar)
     qDebug().noquote() << oss.str().c_str();
 }
 
+void Debug::deBug(string file, int line, string function, QString message)
+{
+    ostringstream oss;
+    oss << file << "(" << line << ")" << "/" << function << ":" << message.toStdString() << endl;
+    qDebug().noquote() << oss.str().c_str();
+}
+

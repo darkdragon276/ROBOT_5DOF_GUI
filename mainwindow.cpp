@@ -3,7 +3,7 @@
 #define COMBOBOX_NUM    (6)
 #define CHECKBOX_NUM    (7)
 #define PARA_NUM        (4)
-#define CAMERA_PARA_NUM (10)
+#define CAMERA_PARA_NUM (4)
 const char* comboBox_Name[COMBOBOX_NUM] = {"comboBox_Comport",
                                            "comboBox_Baudrate",
                                            "comboBox_Databits",
@@ -27,13 +27,7 @@ const char* para_Name[PARA_NUM] = {"Para1",
 const char* cameraPara_Name[CAMERA_PARA_NUM] = {"alpha",
                                                 "beta",
                                                 "gamma",
-                                                "BinaryThresh",
-                                                "Hmax",
-                                                "Hmin",
-                                                "Smax",
-                                                "Smin",
-                                                "Vmax",
-                                                "Vmin"};
+                                                "BinaryThresh"};
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow(parent),
     m_ui(new Ui::MainWindow),
@@ -410,14 +404,17 @@ void MainWindow::camera_init()
     double _alpha, _beta, _gamma, _threshbinary;
     Scalar _hsv_high, _hsv_low;
     ImageProcess::getParameterFromFile(_alpha, _beta, _gamma, _threshbinary, _hsv_high, _hsv_low);
-    double value[CAMERA_PARA_NUM] = {_alpha, _beta, _gamma, _threshbinary,
-                                     _hsv_high[0], _hsv_low[0], _hsv_high[1],
-                                     _hsv_low[1], _hsv_high[2], _hsv_low[2]};
+    double value[CAMERA_PARA_NUM] = {_alpha, _beta, _gamma, _threshbinary};
+    //                                     _hsv_high[0], _hsv_low[0], _hsv_high[1],
+    //                                     _hsv_low[1], _hsv_high[2], _hsv_low[2]};
     for(int i = 0; i < CAMERA_PARA_NUM; i++) {
         this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i]))->setValue(value[i]);
         pre_setSlider(this->findChild<QDoubleSpinBox*>(tr("doubleSpinBox_%1").arg(cameraPara_Name[i])),
                       this->findChild<QSlider*>(tr("horizontalSlider_%1").arg(cameraPara_Name[i])));
     }
+
+    auto_run_timer = new QTimer(this);
+    connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
 }
 
 void MainWindow::camera_openCamera()
@@ -600,10 +597,26 @@ void MainWindow::cv_calib()
 
 void MainWindow::cv_autoRun()
 {
-    PointProcess::Object_t object;
-    m_camera.getObject(object, 0);
+    if(m_ui->pushButton_Run->text() == "Run") {
+        m_ui->pushButton_Run->setText(tr("Cancel"));
+        auto_run_timer->start(20);
+    } else {
+        m_ui->pushButton_Run->setText(tr("Run"));
+        auto_run_timer->stop();
+    }
+}
+
+void MainWindow::autoGrabObject()
+{
+    disconnect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
+    Filter::Object_t object = {Point2f(0,0), 0, 0};
+    if(m_camera.getObject(object, 0) == false) {
+        connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
+        return;
+    }
     if((object.center.x == 0 && object.center.y == 0) || object.radius_img == 0) {
         M_DEBUG("error radius or center is zero");
+        connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
         return;
     }
     Point2f real_center, real_base;
@@ -611,8 +624,9 @@ void MainWindow::cv_autoRun()
     ImageProcess::toReal(object.center, real_center);
     ImageProcess::toReal(object.radius_img, real_width);
     ImageProcess::toReal(m_camera.getBaseCenter(), real_base);
-//    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
+    //    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
     m_serial->setWidthNPosition(real_center, 2000, real_width*2.0/10.0, real_base);
+    connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
 }
 
 void MainWindow::on_pushButton_Camera_Connect_clicked()
@@ -642,12 +656,14 @@ void MainWindow::dip_sliderChanged(int value)
         }
     }
 
-    Scalar _hsv_max(m_ui->doubleSpinBox_Hmax->value(),
-                    m_ui->doubleSpinBox_Smax->value(),
-                    m_ui->doubleSpinBox_Vmax->value());
-    Scalar _hsv_min(m_ui->doubleSpinBox_Hmin->value(),
-                    m_ui->doubleSpinBox_Smin->value(),
-                    m_ui->doubleSpinBox_Vmin->value());
+    //    Scalar _hsv_max(m_ui->doubleSpinBox_Hmax->value(),
+    //                    m_ui->doubleSpinBox_Smax->value(),
+    //                    m_ui->doubleSpinBox_Vmax->value());
+    //    Scalar _hsv_min(m_ui->doubleSpinBox_Hmin->value(),
+    //                    m_ui->doubleSpinBox_Smin->value(),
+    //                    m_ui->doubleSpinBox_Vmin->value());
+    Scalar _hsv_max(0, 0, 0);
+    Scalar _hsv_min(0, 0, 0);
     m_camera.setPreProcessParameter(m_ui->doubleSpinBox_gamma->value(),
                                     m_ui->doubleSpinBox_alpha->value(),
                                     m_ui->doubleSpinBox_beta->value(),

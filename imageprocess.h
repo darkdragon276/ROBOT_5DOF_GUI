@@ -22,7 +22,7 @@
 #include <QPixmap>
 #include <QObject>
 
-#include "pointprocess.h"
+#include "filter.h"
 #include "debug.h"
 
 #define I_DEBUG(image)      ImageProcess::deBugImage(image)
@@ -108,13 +108,13 @@ public: // non static function => must call object
     void setParameterIntoFile();
     Mat getImageFromCamera(ColorConversionCodes flag = COLOR_BGR2BGRA);
     void setMode(processMode_t _mode);
-    void setVecObjects(vector<PointProcess::Object_t> vec_objects);
-    void getObject(PointProcess::Object_t& _object, int index);
+    void setVecObjects(vector<Filter::Object_t> vec_objects);
+    bool getObject(Filter::Object_t& _object, int index);
 
     // loop processing
     void process();
-    void basicProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
-    void suftProcess(Mat &color_img, vector<PointProcess::Object_t> &vec_objects);
+    void basicProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
+    void suftProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
 
     // base process
     void initBase(Mat rgb_img);
@@ -129,11 +129,13 @@ private:
     double threshbinary = 100;
     processMode_t mode = ModeNull;
     QTimer *_timer_release_buffer;
-    PointProcess point_process;
-    vector<PointProcess::Object_t> objects_detected;
+    Filter contour_filter, suft_filter;
+    vector<Filter::Object_t> objects_detected;
 
     // base process
     static const int MAX_PROCESS_NUM = 60;
+    static const int OBSET_RANGE_RGB = 50;
+    static const int OBSET_SUFT_ROI = 5;
     int process_num = MAX_PROCESS_NUM;
     Mat base_mask;
     Point2f base_center;

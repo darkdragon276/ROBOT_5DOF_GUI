@@ -185,6 +185,29 @@ bool RobotControll::setCommandNWait(robotCommand_t cmd, const QString para)
     return true;
 }
 
+void RobotControll::getObsetPosition(Point2f pos, Point3f &obset)
+{
+    double x_raw = -pos.x/10;
+    double y_raw = pos.y/10;
+
+    int num_cols = (int)(-x_raw/2.5 + 4.5);
+    if(num_cols < 0) {
+        num_cols = 0;
+    } else if(num_cols > 8) {
+        num_cols = 8;
+    }
+
+    int num_rows = (int)(y_raw/2.5  - 1.5);
+    if(num_rows < 0) {
+        num_rows = 0;
+    } else if(num_cols > 6) {
+        num_rows = 6;
+    }
+    obset = Point3f(x_raw + robot_obset.at(num_rows).at(num_cols).x,
+                    y_raw + robot_obset.at(num_rows).at(num_cols).y,
+                    robot_obset.at(num_rows).at(num_cols).z);
+}
+
 RobotControll::robotStatus_t RobotControll::getStatus()
 {
     return robot_stt;
@@ -202,12 +225,27 @@ bool RobotControll::isTimeOut()
 
 void RobotControll::setWidthNPosition(Point2f pos, int time, double width, Point2f base_center)
 {
-    const QString para_poswidmax = tr("%1 %2 %3 1.0").arg(width+1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
-    const QString para_poswidmin = tr("%1 %2 %3 1.0").arg(width-1).arg(-pos.x/10+1).arg(pos.y/10+0.5);
+    Point3f obset_pos, obset_base;
+    getObsetPosition(pos, obset_pos);
+    getObsetPosition(base_center, obset_base);
+    const QString para_poswidmax = tr("%1 %2 %3 %4").arg(width + 1)
+                                                    .arg(obset_pos.x)
+                                                    .arg(obset_pos.y)
+                                                    .arg(obset_pos.z - 0.5);
+    const QString para_poswidmin = tr("%1 %2 %3 %4").arg(width - 1)
+                                                    .arg(obset_pos.x)
+                                                    .arg(obset_pos.y)
+                                                    .arg(obset_pos.z - 0.5);
     const QString para_time = tr("%1").arg(time);
-    const QString para_posbase = tr("%1 %2 1.0").arg(-base_center.x/10+1).arg(base_center.y/10+0.5);
-    const QString para_poswidbase = tr("%1 %2 %3 1.0").arg(width+1).arg(-base_center.x/10+1).arg(base_center.y/10+0.5);
-
+    const QString para_posbase = tr("%1 %2 %3").arg(obset_base.x)
+                                               .arg(obset_base.y)
+                                               .arg(obset_base.z);
+    const QString para_poswidbase = tr("%1 %2 %3 %4").arg(width + 0.5)
+                                                     .arg(obset_base.x)
+                                                     .arg(obset_base.y)
+                                                     .arg(obset_base.z);
+    M_DEBUG(para_poswidmax);
+    M_DEBUG(para_posbase);
     setCommandNWait(SetTime, para_time);
     setCommandNWait(SetWidPos, para_poswidmax);
     setCommandNWait(SetWidPos, para_poswidmin);

@@ -79,6 +79,7 @@ private:
     void timeOut();
     void setStatus(QString response);
     bool setCommandNWait(robotCommand_t cmd, const QString para = "");
+    void getObsetPosition(Point2f pos, Point3f &obset);
 
 public:
     bool setCommand(robotCommand_t cmd, int time, const QString para = "");
@@ -92,6 +93,34 @@ private:
     robotStatus_t robot_stt = RobotIdle;
     QTimer *timeout;
     bool istimeout = false;
+    vector<vector<Point3f>> robot_obset = {{Point3f(1.2, 0.1, 1.3), Point3f(0.8, -0.1, 1.5), Point3f(0.8, -0.1, 1.3),
+                                            Point3f(0.8, 0.0, 1.3), Point3f(0.6, 0.2, 1.0), Point3f(0.5, 0.2, 1.0),
+                                            Point3f(0.4, 0.2, 1.2), Point3f(0.0, 0.4, 1.2), Point3f(-0.2, 0.4, 1.4)},// row 1
+
+                                           {Point3f(1.4, 0.2, 1.5), Point3f(1.4, 0.2, 1.5), Point3f(1.2, 0.0, 1.3),
+                                            Point3f(1.0, 0.4, 1.3), Point3f(0.8, 0.4, 1.3), Point3f(0.5, 0.6, 1.1),
+                                            Point3f(0.3, 0.6, 1.3), Point3f(0.0, 0.6, 1.7), Point3f(0.0, 0.7, 1.8)},// row 2
+
+                                           {Point3f(1.4, 0.2, 1.5), Point3f(1.5, 0.1, 1.8), Point3f(1.3, 0.3, 1.8),
+                                            Point3f(1.1, 0.5, 1.8), Point3f(0.8, 0.7, 1.8), Point3f(0.7, 0.9, 1.8),
+                                            Point3f(0.3, 1.1, 1.9), Point3f(0.2, 1.0, 1.9), Point3f(0.0, 0.9, 2.1)},// row 3
+
+                                           {Point3f(1.4, 0.0, 1.5), Point3f(1.5, -0.1, 1.6), Point3f(1.2, 0.2, 1.7),
+                                            Point3f(1.1, 0.6, 1.9), Point3f(1.1, 0.8, 2.1), Point3f(0.5, 1.0, 2.1),
+                                            Point3f(0.3, 1.0, 1.7), Point3f(0.2, 1.0, 1.7), Point3f(0.0, 0.4, 1.9)},// row 4
+
+                                           {Point3f(1.4, -0.2, 1.4), Point3f(1.3, -0.3, 1.4), Point3f(1.4, 0.0, 1.7),
+                                            Point3f(1.1, 0.4, 1.7), Point3f(1.1, 0.6, 1.7), Point3f(0.6, 0.6, 1.7),
+                                            Point3f(0.3, 0.6, 1.7), Point3f(0.4, 0.6, 1.4), Point3f(0.2, 0.3, 1.4)},// row 5
+
+                                           {Point3f(1.3, -0.4, 1.0), Point3f(1.3, -0.3, 1.2), Point3f(1.4, -0.1, 1.2),
+                                            Point3f(1.1, 0.1, 1.2), Point3f(1.3, 0.1, 1.2), Point3f(0.7, 0.1, 1.2),
+                                            Point3f(0.5, 0.1, 1.2), Point3f(0.5, 0.3, 1.2), Point3f(0.4, 0.1, 1.2)},// row 6
+
+                                           {Point3f(1.7, -0.8, 0.9), Point3f(1.7, -0.6, 0.9), Point3f(1.5, -0.6, 0.9),
+                                            Point3f(1.3, -0.4, 1.0), Point3f(1.3, -0.2, 1.0), Point3f(0.9, -0.2, 1.0),
+                                            Point3f(0.6, 0.0, 1.1), Point3f(0.6, 0.0, 1.1), Point3f(0.6, -0.2, 0.9)},// row 7
+                                           };
 
 };
 

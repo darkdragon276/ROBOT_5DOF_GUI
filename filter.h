@@ -1,5 +1,5 @@
-#ifndef POINTPROCESS_H
-#define POINTPROCESS_H
+#ifndef FILTER_H
+#define FILTER_H
 #include "opencv4/opencv2/opencv.hpp"
 #include "opencv4/opencv2/core/types.hpp"
 
@@ -12,12 +12,12 @@
 //#define OBJECT_ANGLE
 
 using namespace cv;
-class PointProcess: public QObject
+class Filter: public QObject
 {
     Q_OBJECT
 public:
-    explicit PointProcess(QObject *parent=Q_NULLPTR);
-    ~PointProcess();
+    explicit Filter(QObject *parent=Q_NULLPTR);
+    ~Filter();
 
     typedef enum {
         normal,
@@ -41,9 +41,11 @@ public:
     void hierarchicalClustering(vector<Point2f> point_list, double max_distance,
                                 int max_group, vector<vector<int> > &pointInGroup_idx);
     double getAngle(vector<Point2f> vec_contour, Mat &color_img);
-    void filledPara(vector<Point2f> contour, Object_t &object, Mat &color_image);
+    void filledPara(vector<Point2f> contour, Object_t &object);
+    static void contour2Object(vector<Point2f> contour, Filter::Object_t &object);
     // process method for vector<contour>
-    void setVecContour(vector<vector<Point>> _vec_contour, Mat &color_image);
+    void setVecContour(vector<vector<Point>> _vec_contour);
+    void setVecObject(vector<Object_t> _vec_object);
     void cluster();
     bool isReadyGet(vector<Object_t> &_vec_object);
 
@@ -51,7 +53,7 @@ signals:
     void signalCluster();
 private:
     // process method for vector<point>
-    static const int MAX_NUM_SIZE = 3, MAX_GROUP_NUM = 10, ACURACY_GROUP_SIZE = 40;
+    static const int MAX_NUM_SIZE = 30, MAX_GROUP_NUM = 10, ACURACY_GROUP_SIZE = 40;
 
     // process method for vector<contour>
     vector<Object_t> objects_raw, objects_cluster;

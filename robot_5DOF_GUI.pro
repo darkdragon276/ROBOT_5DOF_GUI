@@ -29,18 +29,16 @@ SOURCES += \
         imageprocess.cpp \
     qlabel_custom.cpp \
     robotcontroll.cpp \
-    pointprocess.cpp \
     debug.cpp \
-    simplekalmanfilter.cpp
+    filter.cpp
 
 HEADERS += \
         mainwindow.h \
     qlabel_custom.h \
     robotcontroll.h \
     imageprocess.h \
-    pointprocess.h \
     debug.h \
-    simplekalmanfilter.h
+    filter.h
 
 FORMS += \
         mainwindow.ui
