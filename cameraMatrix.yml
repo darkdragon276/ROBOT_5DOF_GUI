@@ -1,0 +1,15 @@
+%YAML:1.0
+---
+CameraIntrincyMatrix: !!opencv-matrix
+   rows: 3
+   cols: 3
+   dt: d
+   data: [ 2.7827908127089227e+03, 0., 320., 0., 2.9674454639237829e+03,
+       240., 0., 0., 1. ]
+DistortExtrincyMatrix: !!opencv-matrix
+   rows: 1
+   cols: 5
+   dt: d
+   data: [ 6.5970357089671006e-01, -9.7979510602325215e-01,
+       -3.4133940458898927e-02, -1.8824084801458446e-02,
+       -1.5795917802434858e-02 ]

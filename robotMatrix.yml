@@ -1,0 +1,18 @@
+%YAML:1.0
+---
+CordinatesRotateMatrix: !!opencv-matrix
+   rows: 2
+   cols: 2
+   dt: d
+   data: [ -9.9980334487163736e-01, 1.9831076205941732e-02,
+       -1.9831076205941732e-02, -9.9980334487163736e-01 ]
+CordinatesTranferMatrix: !!opencv-matrix
+   rows: 2
+   cols: 1
+   dt: d
+   data: [ 1.2836458940723821e+02, 2.6578832109703808e+02 ]
+CordinatesScaleMatrix: !!opencv-matrix
+   rows: 2
+   cols: 2
+   dt: d
+   data: [ 5.4365136873992526e-01, 0., 0., 5.4365136873992526e-01 ]

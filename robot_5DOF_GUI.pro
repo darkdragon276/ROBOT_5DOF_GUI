@@ -26,13 +26,24 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
-    imageprocess.cpp
+        imageprocess.cpp \
+    qlabel_custom.cpp \
+    robotcontroll.cpp \
+    debug.cpp \
+    filter.cpp
 
 HEADERS += \
-        mainwindow.h
+        mainwindow.h \
+    qlabel_custom.h \
+    robotcontroll.h \
+    imageprocess.h \
+    debug.h \
+    filter.h
 
 FORMS += \
         mainwindow.ui
 # OpenCV
 INCLUDEPATH += /usr/local/include/opencv4
-LIBS += -L/usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_videoio -lopencv_imgproc -lopencv_calib3d
+LIBS += -L/usr/local/lib -lopencv_core -lopencv_imgcodecs -lopencv_videoio \
+                         -lopencv_imgproc -lopencv_calib3d -lopencv_flann \
+                         -lopencv_xfeatures2d -lopencv_features2d
