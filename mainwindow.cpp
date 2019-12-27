@@ -400,6 +400,8 @@ void MainWindow::camera_init()
 
     connect(m_ui->checkBox_EnableHSV, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
     connect(m_ui->checkBox_EnableSUFT, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
+    connect(m_ui->checkBox_ConvertImage, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
+    connect(m_ui->checkBox_NonBaseImage, QOverload<bool>::of(&QCheckBox::clicked), this, &MainWindow::dip_checkBoxEnableClicked);
 
     double _alpha, _beta, _gamma, _threshbinary;
     Scalar _hsv_high, _hsv_low;
@@ -563,6 +565,7 @@ void MainWindow::cv_show(bool dynamic) {
 
 void MainWindow::cv_calib()
 {
+    dip_default();
     m_ui->pushButton_Calib->setEnabled(false);
     Size patternSize(8,6); //interior number of corners
     vector<vector<Point3f>> listRealPoints;
@@ -641,6 +644,7 @@ void MainWindow::on_pushButton_Camera_Connect_clicked()
 void MainWindow::on_pushButton_ShowCamera_clicked()
 {
     m_camera.setMode(ImageProcess::ModeNull);
+    dip_default();
     emit cv_signalShow(true);
 }
 
@@ -688,6 +692,8 @@ void MainWindow::dip_checkBoxEnableClicked(bool checked)
     if(checked) {
         m_ui->groupBox_Basic->setEnabled(false);
         m_ui->groupBox_SUFT->setEnabled(false);
+        m_ui->checkBox_ConvertImage->setEnabled(false);
+        m_ui->checkBox_NonBaseImage->setEnabled(false);
 
         if(checkbox == m_ui->checkBox_EnableHSV) {
             m_ui->groupBox_Basic->setEnabled(true);
@@ -696,10 +702,34 @@ void MainWindow::dip_checkBoxEnableClicked(bool checked)
         } else if(checkbox == m_ui->checkBox_EnableSUFT) {
             m_ui->groupBox_SUFT->setEnabled(true);
             m_camera.setMode(m_camera.ModeSUFT);
+        } else if(checkbox == m_ui->checkBox_ConvertImage) {
+            m_ui->checkBox_ConvertImage->setEnabled(true);
+            m_camera.setMode(m_camera.ModeShowConvertImage);
+        } else if(checkbox == m_ui->checkBox_NonBaseImage) {
+            m_ui->checkBox_NonBaseImage->setEnabled(true);
+            m_camera.setMode(m_camera.ModeNonBase);
         }
     } else {
         m_ui->groupBox_Basic->setEnabled(true);
         m_ui->groupBox_SUFT->setEnabled(true);
+        m_ui->checkBox_ConvertImage->setEnabled(true);
+        m_ui->checkBox_NonBaseImage->setEnabled(true);
         m_camera.setMode(m_camera.ModeNull);
     }
+}
+
+void MainWindow::dip_default()
+{
+    m_ui->groupBox_Basic->setEnabled(true);
+    m_ui->groupBox_SUFT->setEnabled(true);
+
+    m_ui->checkBox_ConvertImage->setEnabled(true);
+    m_ui->checkBox_NonBaseImage->setEnabled(true);
+    m_ui->checkBox_EnableHSV->setEnabled(true);
+    m_ui->checkBox_EnableSUFT->setEnabled(true);
+
+    m_ui->checkBox_ConvertImage->setChecked(false);
+    m_ui->checkBox_NonBaseImage->setChecked(false);
+    m_ui->checkBox_EnableHSV->setChecked(false);
+    m_ui->checkBox_EnableSUFT->setChecked(false);
 }

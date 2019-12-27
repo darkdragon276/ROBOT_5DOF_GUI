@@ -95,11 +95,11 @@ private:
     bool istimeout = false;
     vector<vector<Point3f>> robot_obset = {{Point3f(1.2, 0.1, 1.3), Point3f(0.8, -0.1, 1.5), Point3f(0.8, -0.1, 1.3),
                                             Point3f(0.8, 0.0, 1.3), Point3f(0.6, 0.2, 1.0), Point3f(0.5, 0.2, 1.0),
-                                            Point3f(0.4, 0.2, 1.2), Point3f(0.0, 0.4, 1.2), Point3f(-0.2, 0.4, 1.4)},// row 1
+                                            Point3f(0.4, 0.2, 1.2), Point3f(0.0, 0.4, 1.7), Point3f(0.0, 0.4, 1.7)},// row 1
 
                                            {Point3f(1.4, 0.2, 1.5), Point3f(1.4, 0.2, 1.5), Point3f(1.2, 0.0, 1.3),
                                             Point3f(1.0, 0.4, 1.3), Point3f(0.8, 0.4, 1.3), Point3f(0.5, 0.6, 1.1),
-                                            Point3f(0.3, 0.6, 1.3), Point3f(0.0, 0.6, 1.7), Point3f(0.0, 0.7, 1.8)},// row 2
+                                            Point3f(0.3, 0.6, 1.3), Point3f(0.0, 0.6, 1.9), Point3f(0.0, 0.7, 2.1)},// row 2
 
                                            {Point3f(1.4, 0.2, 1.5), Point3f(1.5, 0.1, 1.8), Point3f(1.3, 0.3, 1.8),
                                             Point3f(1.1, 0.5, 1.8), Point3f(0.8, 0.7, 1.8), Point3f(0.7, 0.9, 1.8),

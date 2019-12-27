@@ -28,7 +28,7 @@
 #define I_DEBUG(image)      ImageProcess::deBugImage(image)
 #define DIP_CAMERA_FPS      (60.f)
 #define DIP_TIMER_FPS       (1000.f/DIP_CAMERA_FPS)
-#define DIP_MAIN_FPS        (1000.f/60.f)
+#define DIP_MAIN_FPS        (1000.f/10.f)
 
 using namespace cv;
 using namespace cv::xfeatures2d;
@@ -64,7 +64,9 @@ public:
     static const char* NODEPATH[NumOfMat];
 
     typedef enum {
-        ModeBasicProcessing = 5,
+        ModeShowConvertImage = 27,
+        ModeNonBase,
+        ModeBasicProcessing,
         ModeSUFT,
         ModeNull,
         ModeDebug,
@@ -115,6 +117,7 @@ public: // non static function => must call object
     void process();
     void basicProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
     void suftProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
+    void exPort(Mat &image, vector<Filter::Object_t> &vec_objects);
 
     // base process
     void initBase(Mat rgb_img);
