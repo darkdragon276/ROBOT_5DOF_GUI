@@ -616,8 +616,8 @@ void ImageProcess::initBase(Mat rgb_img)
     }
 
     Mat base_img = imread(getNode(PathBaseAreaSave));
-    if(base_img.empty() || rgb_img.empty()) {
-        M_DEBUG("Base Image or Input Image empty");
+    if(base_img.empty()) {
+        M_DEBUG("Base Image empty");
         return;
     }
 

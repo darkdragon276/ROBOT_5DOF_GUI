@@ -689,6 +689,9 @@ void MainWindow::dip_spinBoxEditingFinished()
 void MainWindow::dip_checkBoxEnableClicked(bool checked)
 {
     QCheckBox *checkbox = (QCheckBox*)sender();
+    if(m_ui->pushButton_Run->text() == "Cancel") {
+        emit m_ui->pushButton_Run->clicked();
+    }
     if(checked) {
         m_ui->groupBox_Basic->setEnabled(false);
         m_ui->groupBox_SUFT->setEnabled(false);
