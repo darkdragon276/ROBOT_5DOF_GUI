@@ -447,12 +447,17 @@ bool ImageProcess::getObject(Filter::Object_t& _object, int index)
         M_DEBUG("no object detect");
         return false;
     }
-    if(index >= (int)objects_detected.size()) {
-        M_DEBUG("index larger than object num");
-        return false;
+    if(index == -1) {
+        _object = {Point2f(0, 0), 0, 0};
+        _object = objects_detected.at((int)objects_detected.size()-1);
+    } else {
+        if(index >= (int)objects_detected.size()) {
+            M_DEBUG("index larger than object num");
+            return false;
+        }
+        _object = {Point2f(0, 0), 0, 0};
+        _object = objects_detected.at(index);
     }
-    _object = {Point2f(0, 0), 0, 0};
-    _object = objects_detected.at(index);
     return true;
 }
 
@@ -466,9 +471,14 @@ void ImageProcess::process()
     Mat raw_img = getImageFromCamera();
     Mat gamma_img, linear_img, blur_img;
     gammaCorrectionContrast(raw_img, gamma, gamma_img);
-    basicLinearTransformContrast(gamma_img, alpha, (int)beta, linear_img);
+    basicLinearTransformContrast(raw_img, alpha, (int)beta, linear_img);
     medianBlur (linear_img, blur_img, 3);
     if(mode == ModeNull) {
+        setImage(raw_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img);
+        return;
+    }
+    if(mode == ModeShowConvertImage) {
         setImage(blur_img);
         Debug::_delete(raw_img, gamma_img, linear_img, blur_img);
         return;
@@ -484,6 +494,12 @@ void ImageProcess::process()
     Mat color_temp, bitwise_img;
     cvtColor(base_mask, color_temp, COLOR_GRAY2BGR);
     bitwise_or(color_temp, blur_img, bitwise_img);
+    if(mode == ModeNonBase) {
+        setImage(bitwise_img);
+        Debug::_delete(raw_img, gamma_img, linear_img, blur_img,
+                       color_temp, bitwise_img);
+        return;
+    }
 
     // basic processing
     vector<Filter::Object_t> vec_objects;
@@ -491,8 +507,7 @@ void ImageProcess::process()
     Mat basic_img = bitwise_img.clone();
     basicProcess(basic_img, vec_objects);
     if(mode == ModeBasicProcessing) {
-        setImage(basic_img);
-        setVecObjects(vec_objects);
+        exPort(raw_img, vec_objects);
         Debug::_delete(raw_img, gamma_img, linear_img, blur_img,
                        basic_img, vec_objects);
         return;
@@ -502,8 +517,7 @@ void ImageProcess::process()
     Mat suft_img = bitwise_img.clone();
     suftProcess(suft_img, vec_objects);
     if(mode == ModeSUFT) {
-        setImage(suft_img);
-        setVecObjects(vec_objects);
+        exPort(raw_img, vec_objects);
         Debug::_delete(raw_img, gamma_img, linear_img, blur_img,
                        basic_img, suft_img, vec_objects);
         return;
@@ -539,13 +553,6 @@ void ImageProcess::basicProcess(Mat &color_img, vector<Filter::Object_t> &vec_ob
     vec_objects.clear();
     contour_filter.setVecContour(object_contours);
     while(!contour_filter.isReadyGet(vec_objects));
-    foreach (Filter::Object_t object, vec_objects) {
-        ostringstream strs;
-        strs << (int)object.radius_img;
-        circle(color_img, object.center, 2, Scalar(255, 255, 0), 2);
-        putText(color_img, strs.str(), object.center, FONT_HERSHEY_PLAIN, 2,  Scalar(0,0,255), 2 , 8 , false);
-    }
-
     Debug::_delete(object_contours, contours, approx, temp_img, hsv_img,
                    gray_img, thresh_img);
 }
@@ -588,12 +595,29 @@ void ImageProcess::suftProcess(Mat &color_img, vector<Filter::Object_t> &vec_obj
         M_DEBUG("no object detect");
     }
     vec_objects.shrink_to_fit();
+    //    M_DEBUG(vec_objects.size());
     suft_filter.setVecObject(vec_objects);
     while(!suft_filter.isReadyGet(vec_objects));
-    for(size_t i = 0; i < vec_objects.size(); i++){
-        circle(color_img, vec_objects.at(i).center, 3, Scalar(0, 0, 255), 3);
-    }
     Debug::_delete(img_object);
+}
+
+void ImageProcess::exPort(Mat &image, vector<Filter::Object_t> &vec_objects)
+{
+    setVecObjects(vec_objects);
+    foreach (Filter::Object_t object, vec_objects) {
+        ostringstream strs;
+        strs << (int)object.radius_img;
+        circle(image, object.center, 2, Scalar(255, 255, 0), 2);
+        putText(image, strs.str(), object.center, FONT_HERSHEY_PLAIN, 2,  Scalar(0,0,255), 2 , 8 , false);
+    }
+    setImage(image);
+}
+
+void ImageProcess::clearFilter()
+{
+    suft_filter.clearAll();
+    contour_filter.clearAll();
+    Debug::_delete(objects_detected);
 }
 
 void ImageProcess::initBase(Mat rgb_img)
@@ -604,8 +628,8 @@ void ImageProcess::initBase(Mat rgb_img)
     }
 
     Mat base_img = imread(getNode(PathBaseAreaSave));
-    if(base_img.empty() || rgb_img.empty()) {
-        M_DEBUG("Base Image or Input Image empty");
+    if(base_img.empty()) {
+        M_DEBUG("Base Image empty");
         return;
     }
 
@@ -660,6 +684,7 @@ void ImageProcess::initBase(Mat rgb_img)
 void ImageProcess::setBase()
 {
     process_num = MAX_PROCESS_NUM;
+    base_center = Point2f(0, 0);
 }
 
 Point2f ImageProcess::getBaseCenter()

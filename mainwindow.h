@@ -92,6 +92,7 @@ private slots:
     void dip_sliderChanged(int value);
     void dip_spinBoxEditingFinished();
     void dip_checkBoxEnableClicked(bool checked);
+    void dip_default();
 
 private:
     Ui::MainWindow *m_ui = nullptr;

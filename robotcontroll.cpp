@@ -189,7 +189,7 @@ void RobotControll::getObsetPosition(Point2f pos, Point3f &obset)
 {
     double x_raw = -pos.x/10;
     double y_raw = pos.y/10;
-
+    M_DEBUG(tr("%1 %2").arg(x_raw).arg(y_raw));
     int num_cols = (int)(-x_raw/2.5 + 4.5);
     if(num_cols < 0) {
         num_cols = 0;
@@ -231,11 +231,11 @@ void RobotControll::setWidthNPosition(Point2f pos, int time, double width, Point
     const QString para_poswidmax = tr("%1 %2 %3 %4").arg(width + 1)
                                                     .arg(obset_pos.x)
                                                     .arg(obset_pos.y)
-                                                    .arg(obset_pos.z - 0.5);
+                                                    .arg(obset_pos.z);
     const QString para_poswidmin = tr("%1 %2 %3 %4").arg(width - 1)
                                                     .arg(obset_pos.x)
                                                     .arg(obset_pos.y)
-                                                    .arg(obset_pos.z - 0.5);
+                                                    .arg(obset_pos.z);
     const QString para_time = tr("%1").arg(time);
     const QString para_posbase = tr("%1 %2 %3").arg(obset_base.x)
                                                .arg(obset_base.y)
