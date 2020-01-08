@@ -118,6 +118,7 @@ public: // non static function => must call object
     void basicProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
     void suftProcess(Mat &color_img, vector<Filter::Object_t> &vec_objects);
     void exPort(Mat &image, vector<Filter::Object_t> &vec_objects);
+    void clearFilter();
 
     // base process
     void initBase(Mat rgb_img);
@@ -136,7 +137,7 @@ private:
     vector<Filter::Object_t> objects_detected;
 
     // base process
-    static const int MAX_PROCESS_NUM = 60;
+    static const int MAX_PROCESS_NUM = 20;
     static const int OBSET_RANGE_RGB = 50;
     static const int OBSET_SUFT_ROI = 5;
     int process_num = MAX_PROCESS_NUM;

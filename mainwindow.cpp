@@ -613,7 +613,7 @@ void MainWindow::autoGrabObject()
 {
     disconnect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
     Filter::Object_t object = {Point2f(0,0), 0, 0};
-    if(m_camera.getObject(object, 0) == false) {
+    if(m_camera.getObject(object, -1) == false) {
         connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
         return;
     }
@@ -622,13 +622,21 @@ void MainWindow::autoGrabObject()
         connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
         return;
     }
+
     Point2f real_center, real_base;
     double real_width;
     ImageProcess::toReal(object.center, real_center);
     ImageProcess::toReal(object.radius_img, real_width);
+    if(real_width*2.0/10.0 > 35.0) {
+        M_DEBUG("non object");
+        m_camera.clearFilter();
+        connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
+        return;
+    }
     ImageProcess::toReal(m_camera.getBaseCenter(), real_base);
     //    qDebug() << tr("x:%1, y:%2").arg(center_real.x).arg(center_real.y);
     m_serial->setWidthNPosition(real_center, 2000, real_width*2.0/10.0, real_base);
+    m_camera.clearFilter();
     connect(auto_run_timer, &QTimer::timeout, this, &MainWindow::autoGrabObject);
 }
 
@@ -717,7 +725,9 @@ void MainWindow::dip_checkBoxEnableClicked(bool checked)
         m_ui->groupBox_SUFT->setEnabled(true);
         m_ui->checkBox_ConvertImage->setEnabled(true);
         m_ui->checkBox_NonBaseImage->setEnabled(true);
+        m_camera.setBase();
         m_camera.setMode(m_camera.ModeNull);
+        m_camera.clearFilter();
     }
 }
 

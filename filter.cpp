@@ -327,7 +327,6 @@ void Filter::cluster()
 
     ready_get_flag = true;
     Debug::_delete(groups_idx, list_center);
-
 }
 
 bool Filter::isReadyGet(vector<Object_t> &_vec_object)
@@ -339,4 +338,13 @@ bool Filter::isReadyGet(vector<Object_t> &_vec_object)
         _vec_object.insert(_vec_object.begin(), objects_cluster.begin(), objects_cluster.end());
     }
     return ready_get_flag;
+}
+
+void Filter::clearAll()
+{
+    Debug::_delete(objects_raw, objects_cluster);
+    ready_get_flag = false;
+    for(int i = 0; i < MAX_NUM_SIZE; i++) {
+        object_per_frame[i] = 0;
+    }
 }

@@ -48,12 +48,13 @@ public:
     void setVecObject(vector<Object_t> _vec_object);
     void cluster();
     bool isReadyGet(vector<Object_t> &_vec_object);
+    void clearAll();
 
 signals:
     void signalCluster();
 private:
     // process method for vector<point>
-    static const int MAX_NUM_SIZE = 30, MAX_GROUP_NUM = 10, ACURACY_GROUP_SIZE = 40;
+    static const int MAX_NUM_SIZE = 20, MAX_GROUP_NUM = 20, ACURACY_GROUP_SIZE = 40;
 
     // process method for vector<contour>
     vector<Object_t> objects_raw, objects_cluster;

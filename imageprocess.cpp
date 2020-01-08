@@ -447,12 +447,17 @@ bool ImageProcess::getObject(Filter::Object_t& _object, int index)
         M_DEBUG("no object detect");
         return false;
     }
-    if(index >= (int)objects_detected.size()) {
-        M_DEBUG("index larger than object num");
-        return false;
+    if(index == -1) {
+        _object = {Point2f(0, 0), 0, 0};
+        _object = objects_detected.at((int)objects_detected.size()-1);
+    } else {
+        if(index >= (int)objects_detected.size()) {
+            M_DEBUG("index larger than object num");
+            return false;
+        }
+        _object = {Point2f(0, 0), 0, 0};
+        _object = objects_detected.at(index);
     }
-    _object = {Point2f(0, 0), 0, 0};
-    _object = objects_detected.at(index);
     return true;
 }
 
@@ -608,6 +613,13 @@ void ImageProcess::exPort(Mat &image, vector<Filter::Object_t> &vec_objects)
     setImage(image);
 }
 
+void ImageProcess::clearFilter()
+{
+    suft_filter.clearAll();
+    contour_filter.clearAll();
+    Debug::_delete(objects_detected);
+}
+
 void ImageProcess::initBase(Mat rgb_img)
 {
     if(rgb_img.empty()) {
@@ -672,6 +684,7 @@ void ImageProcess::initBase(Mat rgb_img)
 void ImageProcess::setBase()
 {
     process_num = MAX_PROCESS_NUM;
+    base_center = Point2f(0, 0);
 }
 
 Point2f ImageProcess::getBaseCenter()
